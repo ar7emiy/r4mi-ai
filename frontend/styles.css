@@ -1,0 +1,134 @@
+:root {
+  --bg: #f4efe7;
+  --ink: #1f2a30;
+  --card: #fff9f1;
+  --accent: #0f7b6c;
+  --accent-2: #a2421f;
+  --muted: #5c676f;
+  --border: #d9ccbc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 20% 10%, #fff4db 0%, transparent 45%),
+    radial-gradient(circle at 90% 10%, #dbf7f0 0%, transparent 45%),
+    var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+.app-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.4rem;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2.6rem);
+  letter-spacing: 0.02em;
+}
+
+.hero p {
+  margin-top: 0.4rem;
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.state-card {
+  grid-column: span 2;
+}
+
+h2 {
+  margin: 0 0 0.7rem;
+  font-size: 1rem;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.55rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem;
+  background: #fff;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.55rem 0.8rem;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: transform 150ms ease, opacity 150ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.45rem 0;
+}
+
+.row button:nth-child(2n) {
+  background: var(--accent-2);
+}
+
+pre {
+  background: #132028;
+  color: #dceaf1;
+  border-radius: 10px;
+  padding: 0.8rem;
+  min-height: 200px;
+  overflow: auto;
+  font-size: 0.8rem;
+}
+
+.muted {
+  color: var(--muted);
+  margin: 0.45rem 0;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 900px) {
+  .state-card {
+    grid-column: span 1;
+  }
+}

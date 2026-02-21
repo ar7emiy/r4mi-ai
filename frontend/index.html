@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Support Automation Factory</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <h1>Support Automation Factory</h1>
+        <p>
+          Observe real support behavior, detect automation opportunities, capture SME workflows, and auto-build modules with
+          human approvals.
+        </p>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>1. Observe & Detect</h2>
+          <label>
+            Ticket Type
+            <select id="ticketType">
+              <option value="billing_dispute">Billing Dispute</option>
+              <option value="cancellation_request">Cancellation Request</option>
+            </select>
+          </label>
+          <div class="row">
+            <button id="startSessionBtn">Start Session</button>
+            <button id="pushSampleEventsBtn">Push Sample Events</button>
+            <button id="detectBtn">Detect Opportunity</button>
+          </div>
+          <p id="sessionMeta" class="muted">No active session.</p>
+        </article>
+
+        <article class="card">
+          <h2>2. Guided Capture</h2>
+          <div class="row">
+            <button id="startCaptureBtn">Start Capture</button>
+            <button id="recordStepBtn">Record Step</button>
+            <button id="closeCaptureBtn">Close Capture + Generate Spec</button>
+          </div>
+          <label>
+            Step Action
+            <input id="stepAction" value="click" />
+          </label>
+          <label>
+            Step Target
+            <input id="stepTarget" value="billing-admin.refund-button" />
+          </label>
+          <label>
+            Notes
+            <input id="stepNotes" value="Check policy threshold before submit" />
+          </label>
+          <p id="captureMeta" class="muted">No active capture.</p>
+        </article>
+
+        <article class="card">
+          <h2>3. Approve & Build</h2>
+          <div class="row">
+            <button id="approveSpecBtn">Approve Spec</button>
+            <button id="buildModuleBtn">Build Module</button>
+            <button id="testModuleBtn">Run Tests</button>
+          </div>
+          <label>
+            SME Feedback
+            <input id="feedbackInput" value="Policy threshold should route to manager approval." />
+          </label>
+          <div class="row">
+            <button id="tuneModuleBtn">Tune Module</button>
+            <button id="promoteModuleBtn">Promote (Shadow)</button>
+          </div>
+        </article>
+
+        <article class="card state-card">
+          <h2>State Snapshot</h2>
+          <button id="refreshStateBtn">Refresh</button>
+          <pre id="stateView">{}</pre>
+        </article>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
