@@ -14,6 +14,9 @@ from pydantic import BaseModel, Field
 
 
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+# In production (Cloud Run), serve built React from dist/. In dev, Vite runs on :5173.
+SERVE_DIR = FRONTEND_DIST if FRONTEND_DIST.exists() else FRONTEND_DIR
 
 
 def utc_now() -> str:
@@ -34,6 +37,7 @@ class Session:
     ticket_type: str
     created_at: str
     events: list[SessionEvent] = field(default_factory=list)
+    screenshots: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -149,6 +153,11 @@ class PromoteModuleRequest(BaseModel):
     module_id: str
 
 
+class ScreenshotRequest(BaseModel):
+    screenshot_base64: str
+    timestamp: str = ""
+
+
 app = FastAPI(title="Support Automation Factory", version="0.1.0")
 
 app.add_middleware(
@@ -181,6 +190,17 @@ def add_session_event(session_id: str, payload: SessionEventRequest) -> dict[str
     event = SessionEvent(ts=utc_now(), app=payload.app, action=payload.action, details=payload.details)
     session.events.append(event)
     return {"event": asdict(event), "event_count": len(session.events)}
+
+
+@app.post("/api/sessions/{session_id}/screenshot")
+def add_screenshot(session_id: str, payload: ScreenshotRequest) -> dict[str, Any]:
+    session = store.sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    entry = {"base64": payload.screenshot_base64, "timestamp": payload.timestamp or utc_now()}
+    session.screenshots.append(entry)
+    session.screenshots = session.screenshots[-10:]  # cap at 10 to limit memory
+    return {"screenshot_count": len(session.screenshots), "timestamp": entry["timestamp"]}
 
 
 @app.post("/api/sessions/{session_id}/detect")
@@ -390,6 +410,12 @@ def promote_module(payload: PromoteModuleRequest) -> dict[str, Any]:
     }
 
 
+@app.get("/api/templates")
+def get_templates() -> dict[str, Any]:
+    from app.workflow_templates import list_templates
+    return {"templates": list_templates()}
+
+
 @app.get("/api/state")
 def get_state() -> dict[str, Any]:
     return {
@@ -403,10 +429,11 @@ def get_state() -> dict[str, Any]:
 
 @app.get("/")
 def index() -> FileResponse:
-    index_file = FRONTEND_DIR / "index.html"
+    index_file = SERVE_DIR / "index.html"
     if not index_file.exists():
-        raise HTTPException(status_code=404, detail="Frontend not found")
+        raise HTTPException(status_code=404, detail="Frontend not built — run: cd frontend && npm run build")
     return FileResponse(index_file)
 
 
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+if SERVE_DIR.exists():
+    app.mount("/", StaticFiles(directory=SERVE_DIR, html=True), name="frontend")

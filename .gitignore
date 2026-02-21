@@ -4,3 +4,14 @@ __pycache__/
 .env
 backend/data.db
 .DS_Store
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.next/
+frontend/out/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
