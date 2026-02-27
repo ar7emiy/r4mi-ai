@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 .env
 backend/data.db
+backend/r4mi.db
+*.db
 .DS_Store
 
 # Frontend
