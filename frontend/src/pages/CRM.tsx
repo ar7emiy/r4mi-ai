@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { useSessionStore } from '@/hooks/useSession'
+import { useR4miStore } from '@/store/r4mi.store'
 import { eventTracker } from '@/lib/eventTracker'
 import CaseFile from '@/components/CaseFile'
 import ActionForm from '@/components/ActionForm'
@@ -17,38 +17,38 @@ const SCENARIO_LABELS: Record<Scenario, string> = {
 }
 
 export default function CRM() {
-  const { sessionId, captureId, stage } = useSessionStore()
+  const { sessionId, sseConnected } = useR4miStore()
   const [scenario, setScenario] = useState<Scenario>('billing_refund')
   const [captureActive, setCaptureActive] = useState(false)
   const [eventCount, setEventCount] = useState(0)
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null)
   const crmRef = useRef<HTMLDivElement>(null)
 
-  // Always track events once a session is active — needed for both observe + capture phases
+  // Always track events once a session is connected
   useEffect(() => {
-    if (sessionId && stage !== 'idle') {
+    if (sessionId && sseConnected) {
       eventTracker.setSession(sessionId)
       eventTracker.start()
     } else {
       eventTracker.stop()
     }
-  }, [sessionId, stage])
-
-  // Capture active indicator follows the pipeline stage
-  useEffect(() => {
-    setCaptureActive(stage === 'capture_active')
-  }, [stage])
+  }, [sessionId, sseConnected])
 
   // Update event count
   useEffect(() => {
     if (!captureActive) return
     const interval = setInterval(() => {
-      setEventCount(eventTracker.getQueue().length)
+      setEventCount(eventTracker.getEventCount())
     }, 1000)
     return () => clearInterval(interval)
   }, [captureActive])
 
-  // Manually toggle capture (for demo when not going through Factory)
+  // Sync captureActive with tracker state
+  useEffect(() => {
+    setCaptureActive(sseConnected && !!sessionId)
+  }, [sseConnected, sessionId])
+
+  // Manually toggle capture
   function toggleCapture() {
     if (!sessionId) return
     if (captureActive) {
@@ -166,12 +166,7 @@ export default function CRM() {
               Session: <code className="font-mono text-foreground">{sessionId}</code>
             </span>
           ) : (
-            <span className="text-muted-foreground italic">No active session — start one in the Factory</span>
-          )}
-          {captureId && (
-            <span className="text-muted-foreground">
-              Capture: <code className="font-mono text-foreground">{captureId}</code>
-            </span>
+            <span className="text-muted-foreground italic">No active session — open the Factory to start</span>
           )}
         </div>
         <div className="flex items-center gap-2">
