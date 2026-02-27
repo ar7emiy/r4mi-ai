@@ -1,0 +1,88 @@
+flowchart TD
+    START([●])
+
+    subgraph TECH["swimlane: 👤 Permit Tech"]
+        T1["Works permit normally\nacross multiple screens"]
+        T2["Receives tab notification\n🔔 Optimization Opportunity"]
+        T3["Opens notification\non own time"]
+        T4["Watches session replay"]
+        T5{{"Confirm\naction sequence?"}}
+        T6["Corrects sequence"]
+        T7{{"Confirm\nknowledge sources?"}}
+        T8["Corrects sources\ne.g. 'use PDF not wiki'"]
+        T9A["Watches agent\ndemo live on screen"]
+        T10{{"Agent matches\nmy workflow?"}}
+        T11["Tunes agent\nin collaboration"]
+        T12["Continues working\nwith agents in tab bar"]
+        T13{{"Exception\nor low confidence?"}}
+        T14["Reviews exception\nmanually"]
+    end
+
+    subgraph R4MI["swimlane: 🤖 r4mi-ai Observer"]
+        R1["Observes UI events\n+ backend calls silently"]
+        R2["On screen switch:\nhighlights unstructured\nsource being read"]
+        R3["Logs full action\ntrace + sources"]
+        R4{{"Repetitive pattern\ndetected?"}}
+        R5["Replays every move\nstep by step on screen"]
+        R6["Highlights extracted\nknowledge sources\nwith confidence %"]
+        R7["Queries Agentverse\nfor similar narrow agent"]
+        R8{{"Match\nfound?"}}
+        R9A["Loads existing agent\nfor live demo"]
+        R9B["Builds new agent\nfrom confirmed trace"]
+        R10A["Applies tuning delta\nfrom Tech input"]
+        R11["Runs agent in background\non new permits"]
+        R12["Highlights sources\non each screen switch"]
+        R13["Flags low confidence\nor exception"]
+    end
+
+    subgraph AGENTVERSE["swimlane: 🌐 Narrow-Agentverse"]
+        A1{{"Similar agent\nexists?"}}
+        A2["Returns agent +\ncontribution metadata\n(author, score %)"]
+        A3["Publishes tuned fork\nlogs contribution split"]
+        A4["Publishes new agent\n100% contribution\n(Supervised mode)"]
+        A5["Agent active\nin Tech tab bar"]
+        A6["Increments trust score\nper successful run"]
+    end
+
+    START --> T1
+    T1 --> R1
+    R1 --> R2
+    R2 -->|"each screen switch"| R2
+    R2 --> R3
+    R3 --> R4
+    R4 -->|"No"| T1
+    R4 -->|"Yes"| T2
+    T2 --> T3
+    T3 --> R5
+    R5 --> T4
+    T4 --> T5
+    T5 -->|"No"| T6
+    T6 --> R5
+    T5 -->|"Yes"| R6
+    R6 --> T7
+    T7 -->|"No"| T8
+    T8 --> R6
+    T7 -->|"Yes"| R7
+    R7 --> A1
+    A1 -->|"Yes"| A2
+    A1 -->|"No"| R9B
+    A2 --> R9A
+    R9A --> T9A
+    T9A --> T10
+    T10 -->|"No"| T11
+    T11 --> R10A
+    R10A --> A3
+    T10 -->|"Yes"| A3
+    A3 --> A5
+    R9B --> A4
+    A4 --> A5
+    A5 --> T12
+    T12 --> R11
+    R11 --> R12
+    R12 --> R13
+    R13 -->|"All good"| A6
+    A6 --> T12
+    R13 -->|"Exception"| T13
+    T13 -->|"Yes"| T14
+    T14 --> R1
+    T13 -->|"No"| A6
