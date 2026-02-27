@@ -1,5 +1,0 @@
-Note on next tasks that would increase alignment with business value we are tryignt to provide:
-
-- Internal billing review marked as complete by default. We actually want to do the audit... that is where majority of unstructured data lives which will source as a key area for optimization by our system. while we MUST NOT go towards mimicing claims adjustment and TPA functions, consider their challenges -- lots of unstructured & most of times relatively poorly organized guiding information, even worse organized/desciferable files/notes text/source material they have to use to support their decisions, as well as coding retranslations they have to do automatically on near legacy UIs. etc
-
-- For cancellation... Look if i don't know what to put into the input fields that means it is either not intuitive enough, but more likely is it because we haven't created access to the supporting/guiding information that a real company would provide to support workflow and/or created these items themselves. I want to really 
