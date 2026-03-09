@@ -1,0 +1,76 @@
+==== SECTION 14.3 — RESIDENTIAL FENCING STANDARDS ====
+Zone applicability: R-1, R-2, R-3
+
+In zones classified R-1 through R-3, fencing along rear and side property lines
+shall not exceed six feet (6') in height without variance approval from the
+Planning Commission. Front yard fencing is limited to four feet (4'). Fences
+constructed of natural wood, vinyl, or decorative metal are permitted. Chain-link
+fencing is prohibited in front yards within all residential zones.
+
+Maximum Heights by Zone:
+  R-1: Rear/side 6ft | Front 4ft
+  R-2: Rear/side 6ft | Front 4ft
+  R-3: Rear/side 6ft | Front 4ft
+
+Variance threshold: any fence exceeding zone maximum requires Planning Commission approval.
+Reference: Municipal Code §14.3, effective 2019-01-01
+
+
+==== SECTION 22.7 — COMMERCIAL SIGNAGE STANDARDS ====
+Zone applicability: C-1, C-2
+
+In C-1 and C-2 zones, total sign area for any single business shall not exceed
+one square foot of sign area per linear foot of building frontage, up to a maximum
+of fifty (50) square feet. Illuminated signs are permitted in C-1 zones provided
+they do not exceed 800 lumens of external illumination facing the public right-of-way.
+Roof signs and rotating signs are prohibited in all commercial zones.
+
+Formula: max_sign_area = min(building_frontage_ft, 50)
+Units: square feet
+Reference: Municipal Code §22.7, effective 2020-06-01
+
+
+==== SECTION 31.2 — DEMOLITION REQUIREMENTS ====
+Zone applicability: All zones
+
+All structures constructed prior to January 1, 1980 shall require a certified
+asbestos and lead paint survey conducted by a licensed environmental assessor
+prior to issuance of a demolition permit. Survey results must be submitted with
+the permit application. Open code enforcement violations must be resolved or
+a compliance agreement executed prior to permit issuance.
+
+Pre-1980 trigger: year_built < 1980 → asbestos survey required
+Violation rule: open_violations > 0 → compliance agreement required before permit
+Reference: Municipal Code §31.2, effective 2015-03-15
+
+
+==== SECTION 8.4 — ACCESSORY DWELLING UNITS ====
+Zone applicability: R-2, R-3 (per SB-9 2023 update)
+
+Accessory Dwelling Units (ADUs) are permitted in R-2 and R-3 zones subject to
+utility capacity confirmation. Applicants must demonstrate sufficient sewer and
+water capacity as measured in Equivalent Dwelling Units (EDU). The binding
+capacity figure is the lower of available sewer EDU and available water EDU.
+Minimum available EDU required: 1.
+
+ADU size limits:
+  Detached ADU: maximum 1,200 sq ft or 50% of primary dwelling, whichever is less
+  Attached ADU: maximum 50% of primary dwelling area
+  Junior ADU: maximum 500 sq ft within existing structure
+
+Reference: Municipal Code §8.4, as amended per SB-9 (2023)
+
+
+==== SECTION 19.1 — SHORT-TERM RENTAL REGISTRATION ====
+Zone applicability: R-1, R-2, R-3 (owner-occupied only)
+
+Short-term rental (STR) permits are available exclusively to owner-occupants.
+The applicant name must match the recorded property owner on file with the
+County Assessor's Office. Rental of non-owner-occupied properties as short-term
+rentals is prohibited and subject to $500 annual surcharge if discovered post-permit.
+
+Owner-occupancy verification: applicant name fuzzy-match against owner registry
+Fee calculation: based on bedroom count per current fee schedule
+Annual renewal required.
+
+Reference: Municipal Code §19.1, effective 2022-09-01

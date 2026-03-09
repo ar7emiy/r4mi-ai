@@ -1,0 +1,77 @@
+{
+  "R2-0041-BW": {
+    "parcel_id": "R2-0041-BW",
+    "open_violations": [],
+    "resolved_violations": []
+  },
+  "R2-0042-BW": {
+    "parcel_id": "R2-0042-BW",
+    "open_violations": [],
+    "resolved_violations": []
+  },
+  "R3-0089-EL": {
+    "parcel_id": "R3-0089-EL",
+    "open_violations": [],
+    "resolved_violations": [
+      {
+        "id": "CE-2022-0044",
+        "description": "Overgrown vegetation blocking sidewalk",
+        "issued": "2022-04-10",
+        "resolved": "2022-05-02"
+      }
+    ]
+  },
+  "C1-0103-CD": {
+    "parcel_id": "C1-0103-CD",
+    "open_violations": [],
+    "resolved_violations": []
+  },
+  "I1-0117-IP": {
+    "parcel_id": "I1-0117-IP",
+    "open_violations": [
+      {
+        "id": "CE-2023-0441",
+        "description": "Unsecured entry points",
+        "issued": "2023-11-03",
+        "resolved": null
+      },
+      {
+        "id": "CE-2022-0189",
+        "description": "Illegal dumping on premises",
+        "issued": "2022-06-14",
+        "resolved": null
+      }
+    ],
+    "resolved_violations": [
+      {
+        "id": "CE-2021-0302",
+        "description": "Broken perimeter fencing",
+        "issued": "2021-08-15",
+        "resolved": "2021-09-20"
+      },
+      {
+        "id": "CE-2020-0118",
+        "description": "Overgrown vegetation",
+        "issued": "2020-05-01",
+        "resolved": "2020-06-10"
+      },
+      {
+        "id": "CE-2019-0445",
+        "description": "Unpermitted storage containers",
+        "issued": "2019-11-12",
+        "resolved": "2020-01-15"
+      },
+      {
+        "id": "CE-2018-0091",
+        "description": "Signage violation",
+        "issued": "2018-03-22",
+        "resolved": "2018-04-30"
+      }
+    ]
+  },
+  "R2-0134-LV": {
+    "parcel_id": "R2-0134-LV",
+    "open_violations": [],
+    "resolved_violations": []
+  }
+}

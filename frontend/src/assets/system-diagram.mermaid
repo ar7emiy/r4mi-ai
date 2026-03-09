@@ -1,0 +1,54 @@
+flowchart TD
+    subgraph Browser["Browser — Mock Legacy Permit UI"]
+        UI["Legacy Permit UI\n(2008-style government software)"]
+        TabBar["Tab Progression Bar\n(fixed bottom, 48px)"]
+        OptPanel["Optimization Panel\n(right drawer, 420px)"]
+        CLIPanelUI["CLI Evidence Panel\n(dark terminal, SSE stream)"]
+    end
+
+    subgraph Backend["Backend — FastAPI 0.133.1 + SQLite"]
+        Observe["/api/observe\nReceives UIEvent stream"]
+        SessionAPI["/api/session/{id}\nReplay + confirm endpoints"]
+        AgentsAPI["/api/agents\nBuild, publish, tune, run"]
+        EvidenceAPI["/api/evidence/{id}\nSimilarity matrix + vectors"]
+        SSEEndpoint["/api/sse\nTyped domain events"]
+        LogsEndpoint["/api/logs\nLog stream (history + live)"]
+        StubsAPI["/api/stubs/*\nGIS, CE, Owner, Hazmat, Fees"]
+    end
+
+    subgraph AI["AI Layer — google-genai + google-adk"]
+        Observer["ObserverAgent\nPattern state machine (10 stages)"]
+        EmbedSvc["EmbeddingService\ntext-embedding-004 — REAL API"]
+        VisionSvc["VisionService\ngemini-2.5-flash Vision — REAL API"]
+        SpecBuilder["SpecBuilderAgent\ngemini-2.5-flash structured output — REAL API"]
+        Matcher["MarketMatcher\nCosine similarity over published specs"]
+        NarrowAgentExec["NarrowAgent\nExecutes NarrowAgentSpec vs stub APIs"]
+    end
+
+    subgraph DB["Persistence"]
+        SessionsDB[("sessions table\nSQLite")]
+        SpecsDB[("narrow_agent_specs table\nSQLite")]
+        SeedFiles[("seed/ JSON files\nApplications, GIS, Policy...")]
+    end
+
+    UI -->|"POST UIEvent"| Observe
+    Observe --> Observer
+    Observer -->|"screen_switch + screenshot_b64"| VisionSvc
+    Observer -->|"submit → embed trace"| EmbedSvc
+    EmbedSvc -->|"cosine similarity"| Matcher
+    Observer --> SessionsDB
+    Matcher --> SpecsDB
+    AgentsAPI -->|"confirmed trace + sources"| SpecBuilder
+    SpecBuilder -->|"embed spec text"| EmbedSvc
+    SpecBuilder --> SpecsDB
+    SSEEndpoint -->|"OPTIMIZATION_OPPORTUNITY"| TabBar
+    TabBar --> OptPanel
+    OptPanel -->|"POST confirm/sequence"| SessionAPI
+    OptPanel -->|"POST confirm/sources"| SessionAPI
+    OptPanel -->|"POST /api/agents/build"| AgentsAPI
+    OptPanel -->|"POST /api/agents/publish"| AgentsAPI
+    AgentsAPI -->|"stream AGENT_DEMO_STEP"| NarrowAgentExec
+    NarrowAgentExec --> StubsAPI
+    StubsAPI --> SeedFiles
+    LogsEndpoint -->|"SSE log stream"| CLIPanelUI
+    EvidenceAPI -->|"matrix + vectors"| Browser

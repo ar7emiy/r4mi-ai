@@ -1,0 +1,38 @@
+{
+  "R2-0041-BW": {
+    "parcel_id": "R2-0041-BW",
+    "hazmat_flag": false,
+    "hazmat_notes": null,
+    "last_survey": null
+  },
+  "R2-0042-BW": {
+    "parcel_id": "R2-0042-BW",
+    "hazmat_flag": false,
+    "hazmat_notes": null,
+    "last_survey": null
+  },
+  "R3-0089-EL": {
+    "parcel_id": "R3-0089-EL",
+    "hazmat_flag": false,
+    "hazmat_notes": null,
+    "last_survey": null
+  },
+  "C1-0103-CD": {
+    "parcel_id": "C1-0103-CD",
+    "hazmat_flag": false,
+    "hazmat_notes": null,
+    "last_survey": null
+  },
+  "I1-0117-IP": {
+    "parcel_id": "I1-0117-IP",
+    "hazmat_flag": false,
+    "hazmat_notes": "None on record",
+    "last_survey": null
+  },
+  "R2-0134-LV": {
+    "parcel_id": "R2-0134-LV",
+    "hazmat_flag": false,
+    "hazmat_notes": null,
+    "last_survey": null
+  }
+}

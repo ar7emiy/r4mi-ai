@@ -1,0 +1,32 @@
+{
+  "ELM-ST-800-900": {
+    "block": "ELM-ST-800-900",
+    "current_load_pct": 67,
+    "available_edu": 4,
+    "last_assessment": "2024-02-01"
+  },
+  "BIRCHWOOD-400-500": {
+    "block": "BIRCHWOOD-400-500",
+    "current_load_pct": 42,
+    "available_edu": 9,
+    "last_assessment": "2024-01-15"
+  },
+  "COMMERCE-2200-2300": {
+    "block": "COMMERCE-2200-2300",
+    "current_load_pct": 55,
+    "available_edu": 6,
+    "last_assessment": "2024-01-20"
+  },
+  "INDUSTRIAL-500-600": {
+    "block": "INDUSTRIAL-500-600",
+    "current_load_pct": 38,
+    "available_edu": 11,
+    "last_assessment": "2024-01-10"
+  },
+  "LAKEVIEW-30-40": {
+    "block": "LAKEVIEW-30-40",
+    "current_load_pct": 61,
+    "available_edu": 5,
+    "last_assessment": "2024-01-18"
+  }
+}

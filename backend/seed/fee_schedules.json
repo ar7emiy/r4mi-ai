@@ -1,0 +1,51 @@
+{
+  "adu_permit": {
+    "name": "ADU Permits — Fee Schedule (Effective Jan 1 2024)",
+    "tiers": [
+      { "label": "Under 500 sq ft", "max_sqft": 499, "fee": 1840 },
+      { "label": "500–750 sq ft", "min_sqft": 500, "max_sqft": 750, "fee": 2310 },
+      { "label": "751–1000 sq ft", "min_sqft": 751, "max_sqft": 1000, "fee": 2780 },
+      { "label": "Over 1000 sq ft", "min_sqft": 1001, "base_fee": 3450, "per_sqft_over": 0.85, "over_threshold": 1000 }
+    ]
+  },
+  "str_registration": {
+    "name": "Short-Term Rental Registration — Annual Fee Schedule",
+    "tiers": [
+      { "label": "Studio / 1BR", "max_bedrooms": 1, "fee": 285 },
+      { "label": "2BR", "min_bedrooms": 2, "max_bedrooms": 2, "fee": 410 },
+      { "label": "3BR", "min_bedrooms": 3, "max_bedrooms": 3, "fee": 535 },
+      { "label": "4BR", "min_bedrooms": 4, "max_bedrooms": 4, "fee": 660 },
+      { "label": "5BR+", "min_bedrooms": 5, "fee": 785 }
+    ],
+    "surcharges": [
+      { "label": "Non-owner occupied", "fee": 500 }
+    ]
+  },
+  "demolition": {
+    "name": "Demolition Permit — Fee Schedule (Effective Jan 1 2024)",
+    "tiers": [
+      { "label": "Under 2000 sq ft", "max_sqft": 1999, "fee": 850 },
+      { "label": "2000–5000 sq ft", "min_sqft": 2000, "max_sqft": 5000, "fee": 1500 },
+      { "label": "5001–20000 sq ft", "min_sqft": 5001, "max_sqft": 20000, "fee": 2800 },
+      { "label": "Over 20000 sq ft", "min_sqft": 20001, "fee": 4200 }
+    ]
+  },
+  "fence_variance": {
+    "name": "Variance Application — Fee Schedule",
+    "flat_fee": 350,
+    "notes": "Flat fee per variance application regardless of fence type or length"
+  },
+  "commercial_signage": {
+    "name": "Commercial Signage Permit — Fee Schedule (Effective Jan 1 2024)",
+    "tiers": [
+      { "label": "Under 10 sq ft", "max_sqft": 9, "fee": 125 },
+      { "label": "10–25 sq ft", "min_sqft": 10, "max_sqft": 25, "fee": 250 },
+      { "label": "26–50 sq ft", "min_sqft": 26, "max_sqft": 50, "fee": 450 },
+      { "label": "Over 50 sq ft", "min_sqft": 51, "fee": 700 }
+    ],
+    "surcharges": [
+      { "label": "Illuminated sign", "fee": 75 },
+      { "label": "Roof sign", "fee": 200 }
+    ]
+  }
+}

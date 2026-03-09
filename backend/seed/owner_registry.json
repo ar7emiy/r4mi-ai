@@ -1,0 +1,44 @@
+{
+  "R2-0041-BW": {
+    "parcel_id": "R2-0041-BW",
+    "recorded_owner": "Margaret L. Hollis",
+    "owner_address": "412 Birchwood Lane",
+    "owner_occupied": true,
+    "owner_match_note": "Matches application address"
+  },
+  "R2-0042-BW": {
+    "parcel_id": "R2-0042-BW",
+    "recorded_owner": "Thomas J. Redfield",
+    "owner_address": "418 Birchwood Lane",
+    "owner_occupied": true,
+    "owner_match_note": "Matches application address"
+  },
+  "R3-0089-EL": {
+    "parcel_id": "R3-0089-EL",
+    "recorded_owner": "David Okonkwo",
+    "owner_address": "87 Elm Street",
+    "owner_occupied": true,
+    "owner_match_note": "Matches application address"
+  },
+  "C1-0103-CD": {
+    "parcel_id": "C1-0103-CD",
+    "recorded_owner": "Commerce Drive Properties LLC",
+    "owner_address": "PO Box 4410, City Hall",
+    "owner_occupied": false,
+    "owner_match_note": "Commercial property — owner is LLC"
+  },
+  "I1-0117-IP": {
+    "parcel_id": "I1-0117-IP",
+    "recorded_owner": "Industrial Holdings Group Inc.",
+    "owner_address": "1100 Business Center Blvd, Suite 300",
+    "owner_occupied": false,
+    "owner_match_note": "Commercial property — owner is corporation"
+  },
+  "R2-0134-LV": {
+    "parcel_id": "R2-0134-LV",
+    "recorded_owner": "Patricia A. Nwosu",
+    "owner_address": "34 Lakeview Terrace, Unit 2",
+    "owner_occupied": true,
+    "owner_match_note": "Matches application address — Yes"
+  }
+}

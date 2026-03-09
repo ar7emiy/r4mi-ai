@@ -1,0 +1,62 @@
+[
+  {
+    "application_id": "PRM-2024-0041",
+    "applicant": "Margaret Hollis",
+    "address": "412 Birchwood Lane",
+    "parcel_id": "R2-0041-BW",
+    "permit_type": "fence_variance",
+    "request": "Install 7ft wooden fence along rear property line",
+    "submitted": "2024-03-12",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0042",
+    "applicant": "Thomas Redfield",
+    "address": "418 Birchwood Lane",
+    "parcel_id": "R2-0042-BW",
+    "permit_type": "fence_variance",
+    "request": "Install 7ft chain-link fence along rear property line",
+    "submitted": "2024-03-13",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0089",
+    "applicant": "David Okonkwo",
+    "address": "87 Elm Street",
+    "parcel_id": "R3-0089-EL",
+    "permit_type": "adu_addition",
+    "request": "Construct 650 sq ft detached ADU in rear yard",
+    "submitted": "2024-03-18",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0103",
+    "applicant": "Sunrise Bakery LLC",
+    "address": "2201 Commerce Drive, Unit 4",
+    "parcel_id": "C1-0103-CD",
+    "permit_type": "commercial_signage",
+    "request": "Install illuminated exterior sign, 24 sq ft, above entrance",
+    "submitted": "2024-03-20",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0117",
+    "applicant": "Redstone Development Group",
+    "address": "559 Industrial Parkway",
+    "parcel_id": "I1-0117-IP",
+    "permit_type": "demolition",
+    "request": "Full demolition of existing warehouse structure",
+    "submitted": "2024-03-22",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0134",
+    "applicant": "Patricia Nwosu",
+    "address": "34 Lakeview Terrace, Unit 2",
+    "parcel_id": "R2-0134-LV",
+    "permit_type": "str_registration",
+    "request": "Short-term rental operating permit, primary residence",
+    "submitted": "2024-03-25",
+    "status": "Pending Review"
+  }
+]
