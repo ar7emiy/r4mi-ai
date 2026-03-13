@@ -100,53 +100,68 @@ class NarrowAgent:
         knowledge_sources: list,
     ) -> dict:
         """Simulate executing one step against stub data."""
-        action = step.get("action", "").lower()
-        field = step.get("field", "")
-        source = step.get("source", "")
+        field = step.get("field", "").lower()
+        source = step.get("source", "").lower()
 
-        # GIS lookup simulation
-        if "gis" in source.lower() or "zone" in field.lower():
-            parcel_id = application.get("parcel_id", "")
+        # Exact field-name routing — SpecBuilderAgent mandates these names
+        if field == "zone_classification":
             return {
                 "value": "R-2",
                 "source_tag": "from GIS API",
                 "confidence": 0.97,
             }
 
-        # Policy lookup simulation
-        if "policy" in source.lower() or "§" in source or "pdf" in source.lower():
-            if "height" in field.lower() or "fence" in action:
-                return {
-                    "value": "6 ft",
-                    "source_tag": "from PDF §14.3",
-                    "confidence": 0.94,
-                }
+        if field == "max_permitted_height":
+            return {
+                "value": "6 ft",
+                "source_tag": "from PDF §14.3",
+                "confidence": 0.94,
+            }
 
-        # Owner registry
-        if "owner" in source.lower() or "owner" in field.lower():
+        if field == "applicant_name":
             return {
                 "value": application.get("applicant", ""),
                 "source_tag": "from Owner Registry",
                 "confidence": 0.99,
             }
 
-        # Fee calculation
-        if "fee" in field.lower():
-            return {
-                "value": "$535",
-                "source_tag": "from Fee Schedule",
-                "confidence": 0.99,
-            }
-
-        # Decision notes
-        if "note" in field.lower() or "decision" in field.lower():
+        if field == "decision_notes":
             return {
                 "value": "Auto-assessed per policy. Variance required.",
                 "source_tag": "from SpecBuilderAgent",
                 "confidence": 0.88,
             }
 
-        return {"value": "", "source_tag": source, "confidence": 0.5}
+        # Fallback: source-only fuzzy matching for non-standard fields
+        if "gis" in source or "parcel" in source:
+            return {
+                "value": "R-2",
+                "source_tag": "from GIS API",
+                "confidence": 0.97,
+            }
+
+        if "pdf" in source or "§" in source or "municipal" in source or "zoning code" in source:
+            return {
+                "value": "6 ft",
+                "source_tag": "from PDF §14.3",
+                "confidence": 0.94,
+            }
+
+        if "fee" in source:
+            return {
+                "value": "$535",
+                "source_tag": "from Fee Schedule",
+                "confidence": 0.99,
+            }
+
+        if "owner" in source or "registry" in source:
+            return {
+                "value": application.get("applicant", ""),
+                "source_tag": "from Owner Registry",
+                "confidence": 0.99,
+            }
+
+        return {"value": "", "source_tag": step.get("source", ""), "confidence": 0.5}
 
 
 narrow_agent = NarrowAgent()

@@ -34,6 +34,27 @@
     "owner_occupied": false,
     "owner_match_note": "Commercial property — owner is corporation"
   },
+  "R2-0043-BW": {
+    "parcel_id": "R2-0043-BW",
+    "recorded_owner": "Susan D. Miller",
+    "owner_address": "422 Birchwood Lane",
+    "owner_occupied": true,
+    "owner_match_note": "Matches application address"
+  },
+  "R2-0044-BW": {
+    "parcel_id": "R2-0044-BW",
+    "recorded_owner": "Gregory T. Vance",
+    "owner_address": "428 Birchwood Lane",
+    "owner_occupied": true,
+    "owner_match_note": "Matches application address"
+  },
+  "R2-0045-BW": {
+    "parcel_id": "R2-0045-BW",
+    "recorded_owner": "Evelyn M. Reed",
+    "owner_address": "434 Birchwood Lane",
+    "owner_occupied": true,
+    "owner_match_note": "Matches application address"
+  },
   "R2-0134-LV": {
     "parcel_id": "R2-0134-LV",
     "recorded_owner": "Patricia A. Nwosu",

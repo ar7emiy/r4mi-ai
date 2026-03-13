@@ -20,6 +20,36 @@
     "status": "Pending Review"
   },
   {
+    "application_id": "PRM-2024-0043",
+    "applicant": "Susan Miller",
+    "address": "422 Birchwood Lane",
+    "parcel_id": "R2-0043-BW",
+    "permit_type": "fence_variance",
+    "request": "Install 7ft wooden fence along side property line",
+    "submitted": "2024-03-14",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0044",
+    "applicant": "Gregory Vance",
+    "address": "428 Birchwood Lane",
+    "parcel_id": "R2-0044-BW",
+    "permit_type": "fence_variance",
+    "request": "Install 7ft wooden fence along rear property line",
+    "submitted": "2024-03-15",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0045",
+    "applicant": "Evelyn Reed",
+    "address": "434 Birchwood Lane",
+    "parcel_id": "R2-0045-BW",
+    "permit_type": "fence_variance",
+    "request": "Install 7ft wooden fence along rear property line",
+    "submitted": "2024-03-16",
+    "status": "Pending Review"
+  },
+  {
     "application_id": "PRM-2024-0089",
     "applicant": "David Okonkwo",
     "address": "87 Elm Street",

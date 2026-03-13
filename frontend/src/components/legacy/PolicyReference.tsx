@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useR4miStore } from '../../store/r4mi.store'
 
 const WIKI_SECTIONS = [
@@ -41,6 +41,11 @@ export function PolicyReference() {
   const [highlightedSection, setHighlightedSection] = useState<string | null>(null)
   const demoMode = useR4miStore((s) => s.demoMode)
   const setDemoMode = useR4miStore((s) => s.setDemoMode)
+
+  // Auto-switch to PDF tab when demo mode is activated (via "Show me" in correction flow)
+  useEffect(() => {
+    if (demoMode) setActiveTab('pdf')
+  }, [demoMode])
 
   function handlePDFParagraphClick(sectionId: string, content: string) {
     if (!demoMode) return
@@ -133,6 +138,7 @@ export function PolicyReference() {
           {WIKI_SECTIONS.map((section, i) => (
             <div
               key={section.id}
+              data-testid={`pdf-section-${section.id}`}
               onClick={() => handlePDFParagraphClick(section.id, section.content)}
               style={{
                 marginBottom: 24,

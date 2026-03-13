@@ -25,12 +25,12 @@ export function SessionReplay({
     enabled: !!sessionId,
   })
 
-  // Animate distilled steps
+  // Animate distilled steps — starts 600ms after mount regardless of replayData
   useEffect(() => {
-    if (!replayData) return
     let cancelled = false
 
     async function animate() {
+      await new Promise((r) => setTimeout(r, 600))
       for (let i = 0; i < DISTILLED_STEPS.length; i++) {
         if (cancelled) return
         setCurrentStep(i)
@@ -50,7 +50,7 @@ export function SessionReplay({
     }
     animate()
     return () => { cancelled = true }
-  }, [replayData])
+  }, [])
 
   const originalScreens = replayData?.total_frames
     ? Math.ceil(replayData.total_frames / 2)
@@ -81,8 +81,8 @@ export function SessionReplay({
                 transition: 'opacity 0.3s',
               }}
             >
-              <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 2 }}>
-                {step.field.toUpperCase()}
+              <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 2, textTransform: 'uppercase' }}>
+                {step.field}
               </div>
               <div
                 style={{

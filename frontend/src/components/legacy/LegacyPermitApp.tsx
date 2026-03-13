@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ApplicationInbox } from './ApplicationInbox'
 import { ApplicationForm } from './ApplicationForm'
 import { GISLookup } from './GISLookup'
@@ -30,6 +30,31 @@ const TAB_LABELS: Record<Tab, string> = {
 export function LegacyPermitApp() {
   const [activeTab, setActiveTab] = useState<Tab>('inbox')
   const demoMode = useR4miStore((s) => s.demoMode)
+  const setDemoMode = useR4miStore((s) => s.setDemoMode)
+  const isRecording = useR4miStore((s) => s.isRecording)
+  const setIsRecording = useR4miStore((s) => s.setIsRecording)
+  const demoSteps = useR4miStore((s) => s.demoSteps)
+  const navigateTo = useR4miStore((s) => s.navigateTo)
+  const setNavigateTo = useR4miStore((s) => s.setNavigateTo)
+
+  // When the overlay requests navigation, switch the active tab and clear the request
+  useEffect(() => {
+    if (navigateTo) {
+      setActiveTab(navigateTo as Tab)
+      setNavigateTo(null)
+    }
+  }, [navigateTo])
+
+  const activeDemoStep = demoSteps.length > 0 ? demoSteps[demoSteps.length - 1] : null
+  const activeSource = activeDemoStep?.source_tag?.toLowerCase() || ''
+
+  function getTabPulse(tab: Tab) {
+    if (!activeDemoStep) return false
+    if (tab === 'gis' && activeSource.includes('gis')) return true
+    if (tab === 'policy' && (activeSource.includes('policy') || activeSource.includes('§') || activeSource.includes('pdf'))) return true
+    if (tab === 'owner-registry' && activeSource.includes('owner')) return true
+    return false
+  }
 
   return (
     <div
@@ -46,14 +71,38 @@ export function LegacyPermitApp() {
             background: '#dc2626',
             color: '#fff',
             textAlign: 'center',
-            padding: '6px 0',
+            padding: '6px 12px',
             fontFamily: 'Arial, sans-serif',
             fontSize: 12,
             fontWeight: 'bold',
             letterSpacing: 1,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
-          r4mi-ai IS WATCHING — NAVIGATE TO THE CORRECT SOURCE
+          <div style={{ flex: 1 }}>
+            {isRecording ? '🤖 CUA MODEL: RECORDING WORKFLOW — NAVIGATE TO THE CORRECT SOURCE' : 'r4mi-ai IS WATCHING — NAVIGATE TO THE CORRECT SOURCE'}
+          </div>
+          <button
+            onClick={() => {
+              setDemoMode(false)
+              setIsRecording(false)
+            }}
+            style={{
+              background: '#fff',
+              border: 'none',
+              color: '#dc2626',
+              padding: '2px 10px',
+              borderRadius: 4,
+              fontSize: 11,
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              textTransform: 'uppercase',
+            }}
+          >
+            Stop & Confirm
+          </button>
         </div>
       )}
 
@@ -84,30 +133,56 @@ export function LegacyPermitApp() {
           gap: 2,
         }}
       >
-        {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              padding: '4px 12px',
-              fontSize: 11,
-              fontFamily: 'Arial',
-              fontWeight: 'bold',
-              letterSpacing: 0.5,
-              background: activeTab === tab ? '#fff' : '#c0c0c0',
-              border: '1px solid #999',
-              borderBottom: activeTab === tab ? '1px solid #fff' : '1px solid #999',
-              cursor: 'pointer',
-              color: '#000',
-              marginBottom: activeTab === tab ? -2 : 0,
-              position: 'relative',
-              zIndex: activeTab === tab ? 1 : 0,
-            }}
-          >
-            {TAB_LABELS[tab]}
-          </button>
-        ))}
+        {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => {
+          const isPulsing = getTabPulse(tab)
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                padding: '4px 12px',
+                fontSize: 11,
+                fontFamily: 'Arial',
+                fontWeight: 'bold',
+                letterSpacing: 0.5,
+                background: activeTab === tab ? '#fff' : isPulsing ? '#6366f1' : '#c0c0c0',
+                border: '1px solid #999',
+                borderBottom: activeTab === tab ? '1px solid #fff' : '1px solid #999',
+                cursor: 'pointer',
+                color: activeTab === tab ? '#000' : isPulsing ? '#fff' : '#000',
+                marginBottom: activeTab === tab ? -2 : 0,
+                position: 'relative',
+                zIndex: activeTab === tab ? 1 : 0,
+                animation: isPulsing ? 'pulse-blue 1.5s infinite' : 'none',
+              }}
+            >
+              {TAB_LABELS[tab]}
+              {isPulsing && (
+                <div style={{
+                  position: 'absolute',
+                  top: -6,
+                  right: -6,
+                  background: '#6366f1',
+                  color: '#fff',
+                  fontSize: 8,
+                  padding: '1px 4px',
+                  borderRadius: 8,
+                  border: '1px solid #fff'
+                }}>
+                  FETCHING
+                </div>
+              )}
+            </button>
+          )
+        })}
       </div>
+      <style>{`
+        @keyframes pulse-blue {
+          0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+          70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+      `}</style>
 
       {/* Main content */}
       <div style={{ display: 'flex', minHeight: 500 }}>

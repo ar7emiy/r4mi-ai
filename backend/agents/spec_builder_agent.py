@@ -79,11 +79,16 @@ class SpecBuilderAgent:
         correction_block = ""
         if correction:
             correction_block = f"""
-CORRECTION FROM EXPERT:
-{correction}
+### CRITICAL EXPERT CORRECTION ###
+The expert has identified an error in the observed workflow or the previous draft.
+CORRECTION: {correction}
 
-Apply this correction when regenerating the spec. The expert's input takes priority
-over any defaults inferred from the action trace.
+INSTRUCTIONS:
+1. You MUST prioritize this correction over the observed action trace and knowledge sources.
+2. If the expert says "the source should be X, not Y", update `knowledge_sources` accordingly.
+3. If the expert specifies a different rule or decision logic, update the `action_sequence` descriptions.
+4. The expert's correction is the ground truth. DO NOT ignore it.
+##################################
 """
 
         return f"""You are building a NarrowAgentSpec — a precise specification for a narrow AI agent
@@ -94,12 +99,21 @@ OBSERVED ACTION TRACE (permit_type={session.permit_type}):
 
 CONFIRMED KNOWLEDGE SOURCES:
 {sources_summary}
+
 {correction_block}
+
 Generate a NarrowAgentSpec that captures the distilled, optimized version of this workflow.
 The agent should eliminate unnecessary navigation by calling APIs directly.
 Be specific about which API endpoints and policy sections to use.
 The action_sequence should be 2-4 steps maximum.
 knowledge_sources must accurately reflect the sources the agent will consult.
+
+MANDATORY FIELD NAMES — you MUST use exactly these `field` values in your action_sequence steps:
+- "zone_classification"  → for the step that looks up the parcel's zone from the GIS API
+- "max_permitted_height" → for the step that retrieves the maximum fence/structure height from policy
+- "decision_notes"       → for any decision, assessment, or notes step
+- "applicant_name"       → for any owner/applicant registry lookup step
+Use no other field names. Each step's `source` must clearly name the system (e.g. "GIS API", "PDF §14.3").
 
 Return valid JSON matching the schema. No markdown, no explanation.
 """

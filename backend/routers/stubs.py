@@ -9,8 +9,16 @@ router = APIRouter()
 SEED = pathlib.Path(__file__).parent.parent / "seed"
 
 
+SUBMITTED_APP_IDS = set()
+
+
 def _load(filename: str) -> dict | list:
-    return json.loads((SEED / filename).read_text())
+    data = json.loads((SEED / filename).read_text())
+    if filename == "applications.json" and isinstance(data, list):
+        for app in data:
+            if app["application_id"] in SUBMITTED_APP_IDS:
+                app["status"] = "Submitted"
+    return data
 
 
 @router.get("/api/stubs/applications")
@@ -25,6 +33,12 @@ def get_application(application_id: str):
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
     return app
+
+
+@router.post("/api/stubs/applications/{application_id}/submit")
+def submit_application(application_id: str):
+    SUBMITTED_APP_IDS.add(application_id)
+    return {"status": "ok", "application_id": application_id}
 
 
 @router.get("/api/stubs/gis/{parcel_id}")

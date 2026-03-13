@@ -1,36 +1,12 @@
-import { useState } from 'react'
 import { AgentSpec } from '../../store/r4mi.store'
-import { useR4miStore } from '../../store/r4mi.store'
 
 export function SpecSummary({
   spec,
-  sessionId,
-  onPublished,
+  onReview,
 }: {
   spec: AgentSpec | null
-  sessionId: string | null
-  onPublished?: () => void
+  onReview: () => void
 }) {
-  const [publishing, setPublishing] = useState(false)
-  const addPublishedAgent = useR4miStore((s) => s.addPublishedAgent)
-
-  async function handlePublish() {
-    if (!sessionId) return
-    setPublishing(true)
-    try {
-      const res = await fetch('/api/agents/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId }),
-      })
-      const published = await res.json()
-      addPublishedAgent(published)
-      onPublished?.()
-    } finally {
-      setPublishing(false)
-    }
-  }
-
   if (!spec) {
     return (
       <div style={{ padding: 16, color: '#94a3b8', fontSize: 12 }}>
@@ -95,24 +71,25 @@ export function SpecSummary({
         ))}
       </div>
 
-      <button
-        onClick={handlePublish}
-        disabled={publishing}
-        style={{
-          background: publishing ? '#4a5568' : '#22c55e',
-          border: 'none',
-          color: '#fff',
-          padding: '10px 24px',
-          cursor: publishing ? 'not-allowed' : 'pointer',
-          fontFamily: 'Inter, system-ui, sans-serif',
-          fontSize: 14,
-          fontWeight: 700,
-          borderRadius: 4,
-          width: '100%',
-        }}
-      >
-        {publishing ? 'Publishing...' : 'Publish to Agentverse'}
-      </button>
+      <div style={{ marginTop: 16 }}>
+        <button
+          onClick={onReview}
+          style={{
+            background: '#6366f1',
+            border: 'none',
+            color: '#fff',
+            padding: '12px 24px',
+            cursor: 'pointer',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 14,
+            fontWeight: 700,
+            borderRadius: 4,
+            width: '100%',
+          }}
+        >
+          Review & Validate Workflow
+        </button>
+      </div>
     </div>
   )
 }

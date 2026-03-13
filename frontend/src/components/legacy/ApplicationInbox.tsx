@@ -22,7 +22,6 @@ const TYPE_LABELS: Record<string, string> = {
 export function ApplicationInbox({ onSelectApp }: { onSelectApp: () => void }) {
   const setActiveApplicationId = useR4miStore((s) => s.setActiveApplicationId)
   const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
-  const publishedAgents = useR4miStore((s) => s.publishedAgents)
   const clearDemoSteps = useR4miStore((s) => s.clearDemoSteps)
 
   const { data: apps = [], isLoading } = useQuery<Application[]>({
@@ -33,14 +32,6 @@ export function ApplicationInbox({ onSelectApp }: { onSelectApp: () => void }) {
   function handleRowClick(app: Application) {
     clearDemoSteps()
     setActiveApplicationId(app.application_id)
-
-    const match = publishedAgents.find((a) => a.permit_type === app.permit_type)
-    if (match) {
-      fetch(`/api/agents/${match.id}/run?application_id=${app.application_id}`, {
-        method: 'POST',
-      })
-    }
-
     onSelectApp()
   }
 
@@ -94,6 +85,7 @@ export function ApplicationInbox({ onSelectApp }: { onSelectApp: () => void }) {
             {apps.map((app, i) => (
               <tr
                 key={app.application_id}
+                data-testid={`app-row-${app.application_id}`}
                 onClick={() => handleRowClick(app)}
                 style={{
                   background:
@@ -129,9 +121,10 @@ export function ApplicationInbox({ onSelectApp }: { onSelectApp: () => void }) {
                       color:
                         app.status === 'Pending Review'
                           ? '#885500'
-                          : app.status === 'Approved'
+                          : app.status === 'Approved' || app.status === 'Submitted'
                             ? '#006600'
                             : '#000',
+                      fontWeight: app.status === 'Submitted' ? 'bold' : 'normal',
                     }}
                   >
                     {app.status}

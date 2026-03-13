@@ -171,3 +171,18 @@ DATABASE_URL=sqlite:///./r4mi.db
 | `backend/routers/agents.py` | Fixed `id` key in `AGENT_PUBLISHED`; run endpoint → background task via sse_bus |
 | `frontend/src/components/legacy/ApplicationInbox.tsx` | Auto-run logic on row click |
 | `frontend/src/components/legacy/ApplicationForm.tsx` | Pass `permit_type` in observe events |
+
+---
+
+## Handoff to Claude: Pending Issues from Final QA
+
+### 1. Replay Completes Automatically Without Action — FIXED (2026-03-06)
+**Root Cause**: `ValidationReplay.tsx` filtered `action_sequence` steps by `s.action === 'input' || s.action === 'type'` only, dropping LLM-generated verbs like `fill`, `enter`, `set`, `update`.
+**Fix applied**: Replaced the two-value equality check with `INPUT_VERBS.has(s.action.toLowerCase()) || !!s.field` where `INPUT_VERBS = new Set(['input', 'type', 'fill', 'enter', 'set', 'update', 'populate'])`. Now any step with a field-targeting action (or an explicit `field` property) is included.
+**File**: `frontend/src/components/overlay/ValidationReplay.tsx`
+**Note**: `SpecSummary.tsx` renders all `action_sequence` steps without filtering — no change needed.
+
+### 2. New Tickets Missing from GIS and Owner Databases — FIXED (2026-03-06)
+**Fix applied**: Added parcel records for `R2-0043-BW`, `R2-0044-BW`, `R2-0045-BW` to both seed files.
+- `backend/seed/gis_results.json` — zone R-2, lot sizes 8100/8250/8600 sqft, setback 5ft
+- `backend/seed/owner_registry.json` — Susan D. Miller / Gregory T. Vance / Evelyn M. Reed, owner-occupied

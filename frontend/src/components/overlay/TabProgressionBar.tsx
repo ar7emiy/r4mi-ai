@@ -109,6 +109,7 @@ export function TabProgressionBar() {
       {/* Opportunity notification */}
       {hasOpportunity && (
         <button
+          data-testid="optimization-badge"
           onClick={() => setPanelView('optimization')}
           style={{
             ...navBtnStyle,

@@ -80,6 +80,14 @@ interface R4miState {
   // Active application in legacy UI
   activeApplicationId: string | null
   setActiveApplicationId: (id: string | null) => void
+
+  // Recording status
+  isRecording: boolean
+  setIsRecording: (v: boolean) => void
+
+  // Navigation request from overlay to legacy UI
+  navigateTo: string | null
+  setNavigateTo: (tab: string | null) => void
 }
 
 export const useR4miStore = create<R4miState>((set) => ({
@@ -105,7 +113,11 @@ export const useR4miStore = create<R4miState>((set) => ({
 
   publishedAgents: [],
   addPublishedAgent: (spec) =>
-    set((s) => ({ publishedAgents: [...s.publishedAgents, spec] })),
+    set((s) => ({
+      publishedAgents: s.publishedAgents.some((a) => a.id === spec.id)
+        ? s.publishedAgents
+        : [...s.publishedAgents, spec],
+    })),
   updatePublishedAgent: (patch) =>
     set((s) => ({
       publishedAgents: s.publishedAgents.map((a) =>
@@ -115,4 +127,10 @@ export const useR4miStore = create<R4miState>((set) => ({
 
   activeApplicationId: null,
   setActiveApplicationId: (id) => set({ activeApplicationId: id }),
+
+  isRecording: false,
+  setIsRecording: (v) => set({ isRecording: v }),
+
+  navigateTo: null,
+  setNavigateTo: (tab) => set({ navigateTo: tab }),
 }))

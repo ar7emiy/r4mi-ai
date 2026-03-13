@@ -13,6 +13,8 @@ export function CorrectionInput({
   const [demoRequested, setDemoRequested] = useState(false)
   const setDemoMode = useR4miStore((s) => s.setDemoMode)
   const setCurrentSpec = useR4miStore((s) => s.setCurrentSpec)
+  const setIsRecording = useR4miStore((s) => s.setIsRecording)
+  const setNavigateTo = useR4miStore((s) => s.setNavigateTo)
 
   // Listen for source selected in demo mode
   useEffect(() => {
@@ -20,6 +22,7 @@ export function CorrectionInput({
       const detail = (e as CustomEvent).detail
       setDemoMode(false)
       setDemoRequested(false)
+      setIsRecording(false)
       setCorrection(
         (prev) =>
           prev +
@@ -34,6 +37,8 @@ export function CorrectionInput({
   async function handleShowMe() {
     setDemoRequested(true)
     setDemoMode(true)
+    setIsRecording(true)
+    setNavigateTo('policy')
   }
 
   async function handleSubmit() {

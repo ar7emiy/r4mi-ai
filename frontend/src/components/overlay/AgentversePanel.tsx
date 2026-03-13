@@ -44,6 +44,7 @@ function AgentCard({ agent }: { agent: AgentSpec }) {
 
   return (
     <div
+      data-testid="agent-card"
       style={{
         background: '#1a1d27',
         border: '1px solid #2d3149',

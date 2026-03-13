@@ -23,6 +23,8 @@ async function typeValue(
 export function ApplicationForm() {
   const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
   const demoSteps = useR4miStore((s) => s.demoSteps)
+  const publishedAgents = useR4miStore((s) => s.publishedAgents)
+  const clearDemoSteps = useR4miStore((s) => s.clearDemoSteps)
 
   const { data: app } = useQuery({
     queryKey: ['application', activeApplicationId],
@@ -53,17 +55,17 @@ export function ApplicationForm() {
           ...prev.filter((t) => t.field !== 'zone'),
           { field: 'zone', value: latestStep.value, source: latestStep.source_tag },
         ])
-      } else if (field.includes('height') || field.includes('max')) {
-        await typeValue(latestStep.value, setMaxHeight)
-        setSourceTags((prev) => [
-          ...prev.filter((t) => t.field !== 'max_height'),
-          { field: 'max_height', value: latestStep.value, source: latestStep.source_tag },
-        ])
       } else if (field.includes('note') || field.includes('decision')) {
         await typeValue(latestStep.value, setNotes)
         setSourceTags((prev) => [
           ...prev.filter((t) => t.field !== 'notes'),
           { field: 'notes', value: latestStep.value, source: latestStep.source_tag },
+        ])
+      } else if (field.includes('height') || field.includes('max')) {
+        await typeValue(latestStep.value, setMaxHeight)
+        setSourceTags((prev) => [
+          ...prev.filter((t) => t.field !== 'max_height'),
+          { field: 'max_height', value: latestStep.value, source: latestStep.source_tag },
         ])
       }
     }
@@ -107,6 +109,11 @@ export function ApplicationForm() {
       })
     }
 
+    // Persist submission status in stub backend
+    await fetch(`/api/stubs/applications/${activeApplicationId}/submit`, {
+      method: 'POST',
+    })
+
     setSubmitted(true)
   }
 
@@ -138,10 +145,42 @@ export function ApplicationForm() {
     )
   }
 
+  const match = app && publishedAgents.find((a) => a.permit_type === app.permit_type)
+
+  function handleAutomate() {
+    if (match && activeApplicationId) {
+      clearDemoSteps()
+      fetch(`/api/agents/${match.id}/run?application_id=${activeApplicationId}`, {
+        method: 'POST',
+      })
+    }
+  }
+
   return (
     <div>
-      <div style={sectionHeader}>
-        APPLICATION FORM — {activeApplicationId}
+      <div style={{ ...sectionHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>APPLICATION FORM — {activeApplicationId}</span>
+        {match && (
+          <button
+            onClick={handleAutomate}
+            style={{
+              background: '#22c55e',
+              border: 'none',
+              color: '#fff',
+              padding: '4px 12px',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}
+            title={`Run ${match.name}`}
+          >
+            ⚡ Automate
+          </button>
+        )}
       </div>
 
       <fieldset style={fieldsetStyle}>
@@ -161,6 +200,7 @@ export function ApplicationForm() {
           onChange={setZone}
           required
           sourceTag={getSourceTag('zone')}
+          testId="field-zone"
         />
         <FormRow
           label="Fence Height Requested"
@@ -175,6 +215,7 @@ export function ApplicationForm() {
           required
           placeholder="ft"
           sourceTag={getSourceTag('max_height')}
+          testId="field-max-height"
         />
         <FormRow
           label="Variance Required"
@@ -199,6 +240,7 @@ export function ApplicationForm() {
         <div style={{ padding: '4px 8px' }}>
           <label style={labelStyle}>PROCESSING NOTES:</label>
           <textarea
+            data-testid="field-notes"
             className="legacy-input"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -229,6 +271,7 @@ function FormRow({
   placeholder = '',
   wide = false,
   sourceTag,
+  testId,
 }: {
   label: string
   value: string
@@ -238,6 +281,7 @@ function FormRow({
   placeholder?: string
   wide?: boolean
   sourceTag?: { field: string; value: string; source: string }
+  testId?: string
 }) {
   return (
     <div
@@ -274,6 +318,7 @@ function FormRow({
           />
         ) : (
           <input
+            data-testid={testId}
             className="legacy-input"
             value={value}
             readOnly={readOnly}

@@ -5,18 +5,38 @@ import { CLIPanel } from './CLIPanel'
 import { SpecSummary } from './SpecSummary'
 import { CorrectionInput } from './CorrectionInput'
 import { SessionReplay } from './SessionReplay'
+import { ValidationReplay } from './ValidationReplay'
 
 export function OptimizationPanel() {
   const panelView = useR4miStore((s) => s.panelView)
   const setPanelView = useR4miStore((s) => s.setPanelView)
   const opportunitySessionId = useR4miStore((s) => s.opportunitySessionId)
   const currentSpec = useR4miStore((s) => s.currentSpec)
-  const [step, setStep] = useState<'replay' | 'correction' | 'spec' | 'done'>('replay')
+  const addPublishedAgent = useR4miStore((s) => s.addPublishedAgent)
+  const setOpportunitySessionId = useR4miStore((s) => s.setOpportunitySessionId)
+  const isRecording = useR4miStore((s) => s.isRecording)
+  const [step, setStep] = useState<'replay' | 'correction' | 'spec' | 'validation' | 'done'>('replay')
 
-  // Reset flow when a new opportunity arrives
   useEffect(() => {
     if (opportunitySessionId) setStep('replay')
   }, [opportunitySessionId])
+
+  async function handlePublish() {
+    if (!opportunitySessionId) return
+    try {
+      const res = await fetch('/api/agents/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: opportunitySessionId }),
+      })
+      const published = await res.json()
+      addPublishedAgent(published)
+      setOpportunitySessionId(null)
+      setStep('done')
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   const isOpen = panelView !== 'closed'
 
@@ -36,7 +56,7 @@ export function OptimizationPanel() {
 
   if (panelView === 'spec') {
     return <SidePanel title="Agent Spec" onClose={() => setPanelView('closed')}>
-      <SpecSummary spec={currentSpec} sessionId={opportunitySessionId} />
+      <SpecSummary spec={currentSpec} onReview={() => { setStep('validation'); setPanelView('optimization') }} />
     </SidePanel>
   }
 
@@ -46,6 +66,7 @@ export function OptimizationPanel() {
       title="r4mi-ai detected a repetitive workflow"
       subtitle="I've seen this pattern 3 times. Here's what I observed."
       onClose={() => setPanelView('closed')}
+      isRecording={isRecording}
     >
       {step === 'replay' && (
         <SessionReplay
@@ -62,8 +83,13 @@ export function OptimizationPanel() {
       {step === 'spec' && (
         <SpecSummary
           spec={currentSpec}
-          sessionId={opportunitySessionId}
-          onPublished={() => setStep('done')}
+          onReview={() => setStep('validation')}
+        />
+      )}
+      {step === 'validation' && (
+        <ValidationReplay
+          spec={currentSpec}
+          onFinished={handlePublish}
         />
       )}
       {step === 'done' && (
@@ -91,12 +117,14 @@ function SidePanel({
   subtitle,
   onClose,
   wide = false,
+  isRecording = false,
   children,
 }: {
   title: string
   subtitle?: string
   onClose: () => void
   wide?: boolean
+  isRecording?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -127,7 +155,25 @@ function SidePanel({
         }}
       >
         <div>
-          <div style={{ color: '#6366f1', fontWeight: 700, fontSize: 13 }}>{title}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ color: '#6366f1', fontWeight: 700, fontSize: 13 }}>{title}</div>
+            {isRecording && (
+              <span
+                style={{
+                  background: 'rgba(220, 38, 38, 0.1)',
+                  color: '#dc2626',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: 20,
+                  border: '1px solid #dc2626',
+                  animation: 'pulse-red 1.5s infinite',
+                }}
+              >
+                🤖 CUA MODEL: RECORDING ACTIVE
+              </span>
+            )}
+          </div>
           {subtitle && (
             <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>{subtitle}</div>
           )}
@@ -151,6 +197,13 @@ function SidePanel({
       <div style={{ flex: 1, overflowY: 'auto' }} className="dark-scroll">
         {children}
       </div>
+      <style>{`
+        @keyframes pulse-red {
+          0% { opacity: 0.6; }
+          50% { opacity: 1; }
+          100% { opacity: 0.6; }
+        }
+      `}</style>
     </div>
   )
 }
