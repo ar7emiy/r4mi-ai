@@ -54,6 +54,52 @@ export function OptimizationPanel() {
     </SidePanel>
   }
 
+  if (panelView === 'guide') {
+    return (
+      <SidePanel title="Build Your Own Agent" subtitle="Follow these steps — r4mi-ai will watch and build an agent from your workflow." onClose={() => setPanelView('closed')}>
+        <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[
+            { n: 1, label: 'Open a Fence Variance application', detail: 'Click PRM-2024-0041 in the Application Inbox.' },
+            { n: 2, label: 'Look up the parcel', detail: 'Switch to the GIS Parcel Lookup tab and check the zone.' },
+            { n: 3, label: 'Review the policy', detail: 'Switch to Policy Reference and read §14.3 (fence height rules).' },
+            { n: 4, label: 'Fill in the form', detail: 'Go back to Application Form. Enter zone, max height, and processing notes.' },
+            { n: 5, label: 'Submit', detail: 'Click SUBMIT APPLICATION. r4mi-ai detects the pattern and builds your agent.' },
+          ].map(({ n, label, detail }) => (
+            <div key={n} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%',
+                background: '#6366f1', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, flexShrink: 0, marginTop: 2,
+              }}>{n}</div>
+              <div>
+                <div style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600 }}>{label}</div>
+                <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>{detail}</div>
+              </div>
+            </div>
+          ))}
+
+          <div style={{
+            marginTop: 8,
+            background: '#1a1d27',
+            border: '1px solid #2d3149',
+            borderRadius: 6,
+            padding: '10px 12px',
+            fontSize: 12,
+            color: '#94a3b8',
+            lineHeight: 1.5,
+          }}>
+            r4mi-ai has already seen 2 similar fence variance workflows. Your submission will be the 3rd — enough to trigger pattern detection and generate your personal agent spec.
+          </div>
+
+          <div style={{ marginTop: 4, fontSize: 11, color: '#4a5568' }}>
+            Once submitted, watch for the <span style={{ color: '#6366f1', fontWeight: 600 }}>Optimization detected</span> button to appear in this toolbar.
+          </div>
+        </div>
+      </SidePanel>
+    )
+  }
+
   if (panelView === 'spec') {
     return <SidePanel title="Agent Spec" onClose={() => setPanelView('closed')}>
       <SpecSummary spec={currentSpec} onReview={() => { setStep('validation'); setPanelView('optimization') }} />

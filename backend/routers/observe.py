@@ -7,6 +7,7 @@ from db import get_session
 from models.event import UIEvent
 from agents.observer_agent import observer_agent
 from routers._sse_bus import sse_bus
+from services.exceptions import QuotaExhaustedException
 
 router = APIRouter()
 
@@ -17,7 +18,11 @@ async def observe(
     db: Session = Depends(get_session),
 ):
     """Receive a UIEvent from the test harness or demo script."""
-    sse_type = await observer_agent.handle_event(event, db)
+    try:
+        sse_type = await observer_agent.handle_event(event, db)
+    except QuotaExhaustedException:
+        await sse_bus.publish("AGENT_EXCEPTION", {"reason": "quota_exhausted"})
+        return {"status": "quota_exhausted", "session_id": event.session_id}
 
     if sse_type:
         await sse_bus.publish(

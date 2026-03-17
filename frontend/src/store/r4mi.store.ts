@@ -45,6 +45,7 @@ export type PanelView =
   | 'spec'
   | 'agentverse'
   | 'cli'
+  | 'guide'
 
 interface R4miState {
   // SSE / detection
@@ -88,6 +89,10 @@ interface R4miState {
   // Navigation request from overlay to legacy UI
   navigateTo: string | null
   setNavigateTo: (tab: string | null) => void
+
+  // Quota exhausted flag
+  quotaExhausted: boolean
+  setQuotaExhausted: (v: boolean) => void
 }
 
 export const useR4miStore = create<R4miState>((set) => ({
@@ -133,4 +138,7 @@ export const useR4miStore = create<R4miState>((set) => ({
 
   navigateTo: null,
   setNavigateTo: (tab) => set({ navigateTo: tab }),
+
+  quotaExhausted: false,
+  setQuotaExhausted: (v) => set({ quotaExhausted: v }),
 }))

@@ -17,6 +17,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     appendDemoStep,
     setCurrentSpec,
     updatePublishedAgent,
+    setQuotaExhausted,
   } = useR4miStore()
 
   useEffect(() => {
@@ -47,6 +48,11 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     es.addEventListener('AGENT_DEMO_STEP', (e) => {
       const data = JSON.parse(e.data)
       appendDemoStep(data)
+    })
+
+    es.addEventListener('AGENT_EXCEPTION', (e) => {
+      const data = JSON.parse(e.data)
+      if (data.reason === 'quota_exhausted') setQuotaExhausted(true)
     })
 
     es.addEventListener('AGENT_RUN_COMPLETE', (e) => {

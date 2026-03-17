@@ -16,6 +16,7 @@ from agents.market_matcher import market_matcher
 from agents.narrow_agent import narrow_agent
 from services.trust_engine import apply_trust_transition
 from services.log_streamer import logger
+from services.exceptions import QuotaExhaustedException
 from routers._sse_bus import sse_bus
 
 router = APIRouter()
@@ -46,7 +47,11 @@ async def build_spec(
     if not record:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    spec = await spec_builder_agent.build_spec(record, correction=body.correction)
+    try:
+        spec = await spec_builder_agent.build_spec(record, correction=body.correction)
+    except QuotaExhaustedException:
+        await sse_bus.publish("AGENT_EXCEPTION", {"reason": "quota_exhausted"})
+        raise HTTPException(status_code=503, detail="quota_exhausted")
 
     # Check market for existing match
     match_result = await market_matcher.find_match(spec, db)
@@ -104,7 +109,18 @@ async def publish_agent(
     if not record:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    spec = await spec_builder_agent.build_spec(record)
+    # Return existing spec if already published — prevents duplicates
+    if record.generated_spec_id:
+        existing = db.get(NarrowAgentSpec, record.generated_spec_id)
+        if existing:
+            logger.info(f"[Agentverse] Session {body.session_id} already published as {existing.id[:8]}, returning existing spec")
+            return existing.model_dump(exclude={"embedding"})
+
+    try:
+        spec = await spec_builder_agent.build_spec(record)
+    except QuotaExhaustedException:
+        await sse_bus.publish("AGENT_EXCEPTION", {"reason": "quota_exhausted"})
+        raise HTTPException(status_code=503, detail="quota_exhausted")
     spec.updated_at = datetime.utcnow()
 
     db.add(spec)

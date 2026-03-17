@@ -5,6 +5,7 @@ import numpy as np
 from google import genai
 
 from services.log_streamer import logger
+from services.exceptions import QuotaExhaustedException
 from models.event import ActionTrace
 
 
@@ -19,10 +20,17 @@ class EmbeddingService:
             return self._cache[cache_key]
 
         t0 = time.time()
-        result = await self.client.aio.models.embed_content(
-            model="models/gemini-embedding-001",
-            contents=text,
-        )
+        try:
+            result = await self.client.aio.models.embed_content(
+                model="models/gemini-embedding-001",
+                contents=text,
+            )
+        except Exception as e:
+            msg = str(e)
+            if any(k in msg for k in ("429", "quota", "RESOURCE_EXHAUSTED", "Quota")):
+                logger.warning(f"[Embedding] QUOTA EXHAUSTED — {msg[:120]}")
+                raise QuotaExhaustedException(msg) from e
+            raise
         latency_ms = int((time.time() - t0) * 1000)
         vector = result.embeddings[0].values
         self._cache[cache_key] = vector

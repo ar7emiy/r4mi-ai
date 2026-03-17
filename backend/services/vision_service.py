@@ -8,6 +8,7 @@ from google import genai
 
 from models.event import KnowledgeSource
 from services.log_streamer import logger
+from services.exceptions import QuotaExhaustedException
 
 
 class VisionService:
@@ -37,29 +38,36 @@ class VisionService:
         logger.info(f"[Observer] Screen switch → {screen_name} | sending screenshot to Gemini Vision...")
         t0 = time.time()
 
-        response = await self.client.aio.models.generate_content(
-            model="gemini-2.5-flash-lite",
-            contents=[
-                {
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": "image/png",
-                                "data": screenshot_b64,
-                            }
-                        },
-                        {
-                            "text": f"""This is a screenshot of the '{screen_name}' screen in a municipal permit system.
+        try:
+            response = await self.client.aio.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=[
+                    {
+                        "parts": [
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/png",
+                                    "data": screenshot_b64,
+                                }
+                            },
+                            {
+                                "text": f"""This is a screenshot of the '{screen_name}' screen in a municipal permit system.
 Identify all regions containing unstructured text that a worker would read to make a permit decision
 (policy paragraphs, case notes, freetext fields, regulation excerpts).
 Return a JSON array only, no markdown, no explanation:
 [{{"selector_description": "...", "text_snippet": "...", "confidence": 0.0, "source_type": "..."}}]
 source_type must be one of: policy_text, case_note, freetext, table"""
-                        },
-                    ]
-                }
-            ],
-        )
+                            },
+                        ]
+                    }
+                ],
+            )
+        except Exception as e:
+            msg = str(e)
+            if any(k in msg for k in ("429", "quota", "RESOURCE_EXHAUSTED", "Quota")):
+                logger.warning(f"[Vision] QUOTA EXHAUSTED — {msg[:120]}")
+                raise QuotaExhaustedException(msg) from e
+            raise
         latency_ms = int((time.time() - t0) * 1000)
 
         sources = self._parse_response(response.text, screen_name)
