@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import mermaid from 'mermaid'
 
 const DIAGRAM = `
@@ -52,6 +53,7 @@ flowchart TD
 
 export function SystemPage() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     mermaid.initialize({ startOnLoad: false, theme: 'dark' })
@@ -74,6 +76,22 @@ export function SystemPage() {
         fontFamily: 'Inter, system-ui, sans-serif',
       }}
     >
+      <button
+        onClick={() => navigate('/')}
+        style={{
+          alignSelf: 'flex-start',
+          background: 'transparent',
+          border: '1px solid #4a5568',
+          color: '#a0aec0',
+          padding: '6px 14px',
+          borderRadius: 4,
+          fontSize: 13,
+          cursor: 'pointer',
+          marginBottom: 24,
+        }}
+      >
+        ← Back to App
+      </button>
       <div
         style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}
       >

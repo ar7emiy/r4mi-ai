@@ -1,9 +1,10 @@
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 
 export function EvidencePage() {
   const { sessionId } = useParams<{ sessionId: string }>()
+  const navigate = useNavigate()
   const [showVectors, setShowVectors] = useState(false)
 
   const { data, isLoading, error } = useQuery({
@@ -24,6 +25,21 @@ export function EvidencePage() {
       }}
     >
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <button
+          onClick={() => navigate('/')}
+          style={{
+            background: 'transparent',
+            border: '1px solid #4a5568',
+            color: '#a0aec0',
+            padding: '6px 14px',
+            borderRadius: 4,
+            fontSize: 13,
+            cursor: 'pointer',
+            marginBottom: 24,
+          }}
+        >
+          ← Back to App
+        </button>
         <div style={{ fontSize: 24, fontWeight: 700, color: '#6366f1', marginBottom: 4 }}>
           r4mi-ai Evidence Panel
         </div>
