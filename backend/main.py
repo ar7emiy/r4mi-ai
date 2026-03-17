@@ -8,229 +8,282 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from db import create_db_and_tables, engine
 from services.log_streamer import logger
 from models.session import SessionRecord, PatternState
+from models.agent_spec import NarrowAgentSpec, TrustLevel
 from models.event import UIEvent, ActionTrace
 
 # ── routers ──────────────────────────────────────────────────────────────────
 from routers import observe, session, agents, evidence, stubs, sse, logs
 
 
+def _make_events(session_id: str, user_id: str, base_time: datetime,
+                 parcel_id: str, zone: str,
+                 constraint_field: str, constraint_value: str) -> list[UIEvent]:
+    """Build a canonical event sequence for any permit type."""
+    t = base_time
+    return [
+        UIEvent(session_id=session_id, user_id=user_id,
+                timestamp=t, event_type="navigate",
+                screen_name="APPLICATION_INBOX",
+                element_selector=f"app_row_{session_id}"),
+        UIEvent(session_id=session_id, user_id=user_id,
+                timestamp=t + timedelta(minutes=1), event_type="screen_switch",
+                screen_name="GIS_LOOKUP", element_selector="tab_gis"),
+        UIEvent(session_id=session_id, user_id=user_id,
+                timestamp=t + timedelta(minutes=2), event_type="input",
+                screen_name="GIS_LOOKUP", element_selector="parcel_id_input",
+                element_value=parcel_id),
+        UIEvent(session_id=session_id, user_id=user_id,
+                timestamp=t + timedelta(minutes=3), event_type="navigate",
+                screen_name="APPLICATION_FORM", element_selector="tab_form"),
+        UIEvent(session_id=session_id, user_id=user_id,
+                timestamp=t + timedelta(minutes=4), event_type="input",
+                screen_name="APPLICATION_FORM", element_selector="zone_classification",
+                element_value=zone),
+        UIEvent(session_id=session_id, user_id=user_id,
+                timestamp=t + timedelta(minutes=5), event_type="screen_switch",
+                screen_name="POLICY_REFERENCE", element_selector="tab_policy"),
+        UIEvent(session_id=session_id, user_id=user_id,
+                timestamp=t + timedelta(minutes=7), event_type="navigate",
+                screen_name="APPLICATION_FORM", element_selector="tab_form"),
+        UIEvent(session_id=session_id, user_id=user_id,
+                timestamp=t + timedelta(minutes=8), event_type="input",
+                screen_name="APPLICATION_FORM", element_selector=constraint_field,
+                element_value=constraint_value),
+        UIEvent(session_id=session_id, user_id=user_id,
+                timestamp=t + timedelta(minutes=9), event_type="submit",
+                screen_name="APPLICATION_FORM", element_selector="submit_btn"),
+    ]
+
+
+async def _seed_sessions_for_type(
+    db: Session,
+    embedding_service,
+    permit_type: str,
+    session_ids: list[str],
+    parcel_ids: list[str],
+    base_times: list[datetime],
+    zone: str,
+    constraint_field: str,
+    constraint_value: str,
+    knowledge_source: dict,
+):
+    for session_id, parcel_id, base_time in zip(session_ids, parcel_ids, base_times):
+        existing = db.get(SessionRecord, session_id)
+        if existing:
+            logger.info(f"[Seed] Session {session_id} already exists, skipping")
+            continue
+
+        events = _make_events(session_id, "permit-tech-001", base_time,
+                              parcel_id, zone, constraint_field, constraint_value)
+        completed_at = base_time + timedelta(minutes=9, seconds=30)
+
+        trace = ActionTrace(
+            session_id=session_id,
+            user_id="permit-tech-001",
+            permit_type=permit_type,
+            events=events,
+            completed_at=completed_at,
+        )
+        trace_text = embedding_service.serialize_trace(trace)
+        vector = await embedding_service.embed(trace_text, cache_key=f"session:{session_id}")
+
+        record = SessionRecord(
+            session_id=session_id,
+            user_id="permit-tech-001",
+            permit_type=permit_type,
+            state=PatternState.CANDIDATE,
+            events=[e.model_dump(mode="json") for e in events],
+            embedding=vector,
+            knowledge_sources=[knowledge_source],
+            completed_at=completed_at,
+            is_seeded=True,
+        )
+        db.add(record)
+        db.commit()
+        logger.info(
+            f"[Seed] Session {session_id} seeded "
+            f"(permit_type={permit_type}, {len(events)} events)"
+        )
+
+
 async def _seed_demo_sessions():
     """
-    Pre-load 2 completed Fence Variance sessions so the 3rd live walkthrough
-    immediately triggers READY state (DEMO_SESSION_SEED=true).
+    Pre-load 2 completed sessions per workflow type so the first live
+    submission by any public user immediately triggers READY state
+    (DEMO_SESSION_SEED=true).
     """
     from services.embedding_service import embedding_service
 
-    base_events_1 = [
-        UIEvent(
-            session_id="session_001",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 10, 9, 0, 0),
-            event_type="navigate",
-            screen_name="APPLICATION_INBOX",
-            element_selector="app_row_PRM-2024-0001",
-        ),
-        UIEvent(
-            session_id="session_001",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 10, 9, 1, 0),
-            event_type="screen_switch",
-            screen_name="GIS_LOOKUP",
-            element_selector="tab_gis",
-        ),
-        UIEvent(
-            session_id="session_001",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 10, 9, 2, 0),
-            event_type="input",
-            screen_name="GIS_LOOKUP",
-            element_selector="parcel_id_input",
-            element_value="R2-SEED-001",
-        ),
-        UIEvent(
-            session_id="session_001",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 10, 9, 3, 0),
-            event_type="navigate",
-            screen_name="APPLICATION_FORM",
-            element_selector="tab_form",
-        ),
-        UIEvent(
-            session_id="session_001",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 10, 9, 4, 0),
-            event_type="input",
-            screen_name="APPLICATION_FORM",
-            element_selector="zone_classification",
-            element_value="R-2",
-        ),
-        UIEvent(
-            session_id="session_001",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 10, 9, 5, 0),
-            event_type="screen_switch",
-            screen_name="POLICY_REFERENCE",
-            element_selector="tab_policy",
-        ),
-        UIEvent(
-            session_id="session_001",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 10, 9, 7, 0),
-            event_type="navigate",
-            screen_name="APPLICATION_FORM",
-            element_selector="tab_form",
-        ),
-        UIEvent(
-            session_id="session_001",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 10, 9, 8, 0),
-            event_type="input",
-            screen_name="APPLICATION_FORM",
-            element_selector="max_permitted_height",
-            element_value="6 ft",
-        ),
-        UIEvent(
-            session_id="session_001",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 10, 9, 9, 0),
-            event_type="submit",
-            screen_name="APPLICATION_FORM",
-            element_selector="submit_btn",
-        ),
-    ]
-
-    base_events_2 = [
-        UIEvent(
-            session_id="session_002",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 11, 10, 0, 0),
-            event_type="navigate",
-            screen_name="APPLICATION_INBOX",
-            element_selector="app_row_PRM-2024-0015",
-        ),
-        UIEvent(
-            session_id="session_002",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 11, 10, 1, 0),
-            event_type="screen_switch",
-            screen_name="GIS_LOOKUP",
-            element_selector="tab_gis",
-        ),
-        UIEvent(
-            session_id="session_002",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 11, 10, 2, 30),
-            event_type="input",
-            screen_name="GIS_LOOKUP",
-            element_selector="parcel_id_input",
-            element_value="R2-SEED-002",
-        ),
-        UIEvent(
-            session_id="session_002",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 11, 10, 3, 0),
-            event_type="navigate",
-            screen_name="APPLICATION_FORM",
-            element_selector="tab_form",
-        ),
-        UIEvent(
-            session_id="session_002",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 11, 10, 4, 0),
-            event_type="input",
-            screen_name="APPLICATION_FORM",
-            element_selector="zone_classification",
-            element_value="R-2",
-        ),
-        UIEvent(
-            session_id="session_002",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 11, 10, 5, 0),
-            event_type="screen_switch",
-            screen_name="POLICY_REFERENCE",
-            element_selector="tab_policy",
-        ),
-        UIEvent(
-            session_id="session_002",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 11, 10, 7, 30),
-            event_type="navigate",
-            screen_name="APPLICATION_FORM",
-            element_selector="tab_form",
-        ),
-        UIEvent(
-            session_id="session_002",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 11, 10, 8, 0),
-            event_type="input",
-            screen_name="APPLICATION_FORM",
-            element_selector="max_permitted_height",
-            element_value="6 ft",
-        ),
-        UIEvent(
-            session_id="session_002",
-            user_id="permit-tech-001",
-            timestamp=datetime(2024, 3, 11, 10, 9, 0),
-            event_type="submit",
-            screen_name="APPLICATION_FORM",
-            element_selector="submit_btn",
-        ),
-    ]
-
-    seed_data = [
-        ("session_001", base_events_1, datetime(2024, 3, 10, 9, 9, 30)),
-        ("session_002", base_events_2, datetime(2024, 3, 11, 10, 9, 30)),
+    WORKFLOW_SEEDS = [
+        {
+            "permit_type": "fence_variance",
+            "session_ids": ["session_001", "session_002"],
+            "parcel_ids": ["R2-SEED-001", "R2-SEED-002"],
+            "base_times": [datetime(2024, 3, 10, 9, 0, 0), datetime(2024, 3, 11, 10, 0, 0)],
+            "zone": "R-2",
+            "constraint_field": "max_permitted_height",
+            "constraint_value": "6 ft",
+            "knowledge_source": {
+                "selector_description": "section_14_3_paragraph",
+                "text_snippet": "shall not exceed six feet (6') in height",
+                "confidence": 0.91,
+                "source_type": "policy_text",
+                "screen_name": "POLICY_REFERENCE",
+            },
+        },
+        {
+            "permit_type": "solar_permit",
+            "session_ids": ["session_solar_001", "session_solar_002"],
+            "parcel_ids": ["R2-SOL-001", "R2-SOL-002"],
+            "base_times": [datetime(2024, 3, 12, 9, 0, 0), datetime(2024, 3, 13, 10, 0, 0)],
+            "zone": "R-2",
+            "constraint_field": "max_permitted_height",
+            "constraint_value": "20 kW max system size",
+            "knowledge_source": {
+                "selector_description": "section_22_1_solar_access",
+                "text_snippet": "residential solar PV systems shall not exceed 20kW nameplate capacity",
+                "confidence": 0.89,
+                "source_type": "policy_text",
+                "screen_name": "POLICY_REFERENCE",
+            },
+        },
+        {
+            "permit_type": "home_occupation",
+            "session_ids": ["session_ho_001", "session_ho_002"],
+            "parcel_ids": ["R2-HO-001", "R2-HO-002"],
+            "base_times": [datetime(2024, 3, 14, 9, 0, 0), datetime(2024, 3, 15, 10, 0, 0)],
+            "zone": "R-2",
+            "constraint_field": "max_permitted_height",
+            "constraint_value": "Allowed — no exterior alterations",
+            "knowledge_source": {
+                "selector_description": "section_18_4_home_occupation",
+                "text_snippet": "home occupations are permitted accessory uses in R-2 zones subject to no exterior evidence",
+                "confidence": 0.88,
+                "source_type": "policy_text",
+                "screen_name": "POLICY_REFERENCE",
+            },
+        },
+        {
+            "permit_type": "tree_removal",
+            "session_ids": ["session_tr_001", "session_tr_002"],
+            "parcel_ids": ["R2-TR-001", "R2-TR-002"],
+            "base_times": [datetime(2024, 3, 16, 9, 0, 0), datetime(2024, 3, 17, 10, 0, 0)],
+            "zone": "R-2",
+            "constraint_field": "max_permitted_height",
+            "constraint_value": "Removal approved — replacement required 1:1",
+            "knowledge_source": {
+                "selector_description": "section_9_7_tree_preservation",
+                "text_snippet": "removal of protected trees requires replacement planting at a 1:1 ratio",
+                "confidence": 0.87,
+                "source_type": "policy_text",
+                "screen_name": "POLICY_REFERENCE",
+            },
+        },
+        {
+            "permit_type": "deck_permit",
+            "session_ids": ["session_dk_001", "session_dk_002"],
+            "parcel_ids": ["R2-DK-001", "R2-DK-002"],
+            "base_times": [datetime(2024, 3, 18, 9, 0, 0), datetime(2024, 3, 19, 10, 0, 0)],
+            "zone": "R-2",
+            "constraint_field": "max_permitted_height",
+            "constraint_value": "30 in max height without railing permit",
+            "knowledge_source": {
+                "selector_description": "section_16_2_accessory_structures",
+                "text_snippet": "decks 30 inches or less above grade do not require guard rails; setback 5ft from rear",
+                "confidence": 0.90,
+                "source_type": "policy_text",
+                "screen_name": "POLICY_REFERENCE",
+            },
+        },
     ]
 
     with Session(engine) as db:
-        for session_id, events, completed_at in seed_data:
-            existing = db.get(SessionRecord, session_id)
-            if existing:
-                logger.info(f"[Seed] Session {session_id} already exists, skipping")
-                continue
-
-            trace = ActionTrace(
-                session_id=session_id,
-                user_id="permit-tech-001",
-                permit_type="fence_variance",
-                events=events,
-                completed_at=completed_at,
-            )
-            trace_text = embedding_service.serialize_trace(trace)
-            vector = await embedding_service.embed(
-                trace_text, cache_key=f"session:{session_id}"
+        for seed in WORKFLOW_SEEDS:
+            await _seed_sessions_for_type(
+                db=db,
+                embedding_service=embedding_service,
+                **seed,
             )
 
-            record = SessionRecord(
-                session_id=session_id,
-                user_id="permit-tech-001",
-                permit_type="fence_variance",
-                state=PatternState.CANDIDATE,
-                events=[e.model_dump(mode="json") for e in events],
-                embedding=vector,
-                knowledge_sources=[
-                    {
-                        "selector_description": "section_14_3_paragraph",
-                        "text_snippet": "shall not exceed six feet (6') in height",
-                        "confidence": 0.91,
-                        "source_type": "policy_text",
-                        "screen_name": "POLICY_REFERENCE",
-                    }
-                ],
-                completed_at=completed_at,
-                is_seeded=True,
-            )
-            db.add(record)
-            db.commit()
-            logger.info(
-                f"[Seed] Session {session_id} seeded "
-                f"(permit_type=fence_variance, {len(events)} events)"
-            )
+
+async def _seed_demo_agent():
+    """
+    Pre-publish one fence_variance NarrowAgentSpec so the ⚡ Automate button
+    is available immediately on fresh start without running the full publish flow.
+    """
+    from services.embedding_service import embedding_service
+
+    SEED_SPEC_ID = "spec_seed_fence_variance_v1"
+    with Session(engine) as db:
+        existing = db.get(NarrowAgentSpec, SEED_SPEC_ID)
+        if existing:
+            logger.info("[Seed] Demo agent spec already exists, skipping")
+            return
+
+        spec_text = (
+            "Fence Variance Permit Processor automates fence variance permit "
+            "processing zone_classification max_permitted_height decision_notes GIS API PDF §14.3"
+        )
+        vector = await embedding_service.embed(spec_text, cache_key="spec:seed:fence_variance_v1")
+
+        spec = NarrowAgentSpec(
+            id=SEED_SPEC_ID,
+            name="Fence Variance Permit Processor",
+            description=(
+                "Processes fence variance permit applications by checking zone "
+                "classification and maximum permitted height from policy §14.3."
+            ),
+            permit_type="fence_variance",
+            trigger_pattern={
+                "permit_type": "fence_variance",
+                "conditions": ["zone_check_required", "height_variance"],
+            },
+            action_sequence=[
+                {
+                    "step": 1,
+                    "action": "lookup_gis",
+                    "source": "GIS API",
+                    "field": "zone_classification",
+                    "description": "Look up parcel zone classification from GIS API",
+                },
+                {
+                    "step": 2,
+                    "action": "lookup_policy",
+                    "source": "PDF §14.3",
+                    "field": "max_permitted_height",
+                    "description": "Retrieve maximum permitted fence height from Municipal Code §14.3",
+                },
+                {
+                    "step": 3,
+                    "action": "submit_decision",
+                    "source": "Application System",
+                    "field": "decision_notes",
+                    "description": "Record zone, height limit, and submit application",
+                },
+            ],
+            knowledge_sources=[
+                {
+                    "type": "policy_text",
+                    "name": "Municipal Code §14.3",
+                    "reference": "PDF §14.3",
+                    "confidence": 0.91,
+                }
+            ],
+            embedding=vector,
+            trust_level=TrustLevel.SUPERVISED,
+            successful_runs=0,
+            contributions=[
+                {"user_id": "permit-tech-001", "role": "author", "share_pct": 100}
+            ],
+        )
+        db.add(spec)
+        db.commit()
+        logger.info("[Seed] Demo agent spec published: fence_variance Permit Processor")
 
 
 @asynccontextmanager
@@ -241,7 +294,8 @@ async def lifespan(app: FastAPI):
     if os.getenv("DEMO_SESSION_SEED", "false").lower() == "true":
         logger.info("[r4mi-ai] DEMO_SESSION_SEED=true — seeding prior sessions...")
         await _seed_demo_sessions()
-        logger.info("[r4mi-ai] Demo sessions ready")
+        await _seed_demo_agent()
+        logger.info("[r4mi-ai] Demo sessions and agent ready")
 
     logger.info("[r4mi-ai] Backend started — listening on :8000")
     yield

@@ -88,5 +88,205 @@
     "request": "Short-term rental operating permit, primary residence",
     "submitted": "2024-03-25",
     "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0150",
+    "applicant": "Kevin Tran",
+    "address": "45 Willowbrook Drive",
+    "parcel_id": "R3-0150-WB",
+    "permit_type": "solar_permit",
+    "request": "Install 6.5kW rooftop solar PV system, south-facing",
+    "submitted": "2024-04-02",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0151",
+    "applicant": "Anita Patel",
+    "address": "109 Sunrise Court",
+    "parcel_id": "R2-0151-SC",
+    "permit_type": "solar_permit",
+    "request": "Install 8.2kW solar panels on south-facing roof, grid-tied",
+    "submitted": "2024-04-03",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0152",
+    "applicant": "Marcus Wellborn",
+    "address": "221 Elmdale Road",
+    "parcel_id": "R2-0152-ER",
+    "permit_type": "solar_permit",
+    "request": "Install 5.0kW grid-tied solar system, rear roof section",
+    "submitted": "2024-04-04",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0153",
+    "applicant": "Clara Jensen",
+    "address": "78 Oak Ridge Place",
+    "parcel_id": "R2-0153-OR",
+    "permit_type": "solar_permit",
+    "request": "Install 7.5kW solar array, south-facing roof, battery backup",
+    "submitted": "2024-04-05",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0154",
+    "applicant": "Bobby Nkemdirim",
+    "address": "334 Hillside Terrace",
+    "parcel_id": "R3-0154-HT",
+    "permit_type": "solar_permit",
+    "request": "Install 10kW solar PV system, flat roof mounting",
+    "submitted": "2024-04-06",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0160",
+    "applicant": "Sarah Kim",
+    "address": "512 Birch Street",
+    "parcel_id": "R2-0160-BS",
+    "permit_type": "home_occupation",
+    "request": "Licensed massage therapy practice, home-based, no client visits on premises",
+    "submitted": "2024-04-08",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0161",
+    "applicant": "Daniel Foster",
+    "address": "88 Cedar Lane",
+    "parcel_id": "R2-0161-CL",
+    "permit_type": "home_occupation",
+    "request": "Graphic design studio, home office, no employees or client visits",
+    "submitted": "2024-04-09",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0162",
+    "applicant": "Priya Gupta",
+    "address": "244 Maple Avenue",
+    "parcel_id": "R2-0162-MA",
+    "permit_type": "home_occupation",
+    "request": "Online tutoring business, no client visits, no signage",
+    "submitted": "2024-04-10",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0163",
+    "applicant": "Jason Kowalski",
+    "address": "19 Ferndale Court",
+    "parcel_id": "R2-0163-FC",
+    "permit_type": "home_occupation",
+    "request": "IT consulting firm, home office, 1 employee (owner only), no signage",
+    "submitted": "2024-04-11",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0164",
+    "applicant": "Maria Santos",
+    "address": "67 Brookside Way",
+    "parcel_id": "R2-0164-BW",
+    "permit_type": "home_occupation",
+    "request": "Photography studio, limited client visits (max 2 per day), no exterior signage",
+    "submitted": "2024-04-12",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0170",
+    "applicant": "William Park",
+    "address": "350 Chestnut Avenue",
+    "parcel_id": "R2-0170-CA",
+    "permit_type": "tree_removal",
+    "request": "Remove 1 heritage oak, root damage to foundation confirmed by arborist",
+    "submitted": "2024-04-14",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0171",
+    "applicant": "Olivia Crane",
+    "address": "97 Spruce Street",
+    "parcel_id": "R2-0171-SS",
+    "permit_type": "tree_removal",
+    "request": "Remove 2 dead ash trees, storm damage, immediate safety hazard",
+    "submitted": "2024-04-15",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0172",
+    "applicant": "Harold Nguyen",
+    "address": "461 Magnolia Boulevard",
+    "parcel_id": "R3-0172-MB",
+    "permit_type": "tree_removal",
+    "request": "Remove 1 diseased eucalyptus, fire hazard, adjacent to fence line",
+    "submitted": "2024-04-16",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0173",
+    "applicant": "Christine Yates",
+    "address": "25 Poplar Road",
+    "parcel_id": "R2-0173-PR",
+    "permit_type": "tree_removal",
+    "request": "Remove dead elm tree, overhead power line risk, utility clearance required",
+    "submitted": "2024-04-17",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0174",
+    "applicant": "Steven Bell",
+    "address": "788 Walnut Street",
+    "parcel_id": "C1-0174-WS",
+    "permit_type": "tree_removal",
+    "request": "Remove 3 palm trees, parking lot expansion, replacement planting proposed",
+    "submitted": "2024-04-18",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0180",
+    "applicant": "James Chen",
+    "address": "122 Rosewood Drive",
+    "parcel_id": "R2-0180-RD",
+    "permit_type": "deck_permit",
+    "request": "Construct 200 sq ft ground-level wood deck, rear yard setback 5ft",
+    "submitted": "2024-04-21",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0181",
+    "applicant": "Lisa Morales",
+    "address": "399 Pinecrest Avenue",
+    "parcel_id": "R2-0181-PA",
+    "permit_type": "deck_permit",
+    "request": "Construct 300 sq ft elevated deck (18in above grade), attached to residence",
+    "submitted": "2024-04-22",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0182",
+    "applicant": "Amanda Torres",
+    "address": "55 Birchwood Court",
+    "parcel_id": "R2-0182-BC",
+    "permit_type": "deck_permit",
+    "request": "Replace existing deck in-kind, 180 sq ft, same footprint and materials",
+    "submitted": "2024-04-23",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0183",
+    "applicant": "Raymond Ekwueme",
+    "address": "271 Linden Lane",
+    "parcel_id": "R3-0183-LL",
+    "permit_type": "deck_permit",
+    "request": "Construct 250 sq ft rooftop deck on multi-family building, parapet wall access",
+    "submitted": "2024-04-24",
+    "status": "Pending Review"
+  },
+  {
+    "application_id": "PRM-2024-0184",
+    "applicant": "Deborah Chang",
+    "address": "443 Sycamore Drive",
+    "parcel_id": "R2-0184-SD",
+    "permit_type": "deck_permit",
+    "request": "Construct 400 sq ft wraparound deck, front and side yards, composite decking",
+    "submitted": "2024-04-25",
+    "status": "Pending Review"
   }
 ]

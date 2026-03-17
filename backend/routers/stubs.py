@@ -1,8 +1,11 @@
 from __future__ import annotations
 import json
 import pathlib
+from datetime import date
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -11,13 +14,19 @@ SEED = pathlib.Path(__file__).parent.parent / "seed"
 
 SUBMITTED_APP_IDS = set()
 
+# Runtime user-created applications (in-memory, not persisted across restarts)
+USER_CREATED_APPS: list[dict] = []
+_user_app_counter = 0
+
 
 def _load(filename: str) -> dict | list:
     data = json.loads((SEED / filename).read_text())
     if filename == "applications.json" and isinstance(data, list):
-        for app in data:
+        merged = list(data) + USER_CREATED_APPS
+        for app in merged:
             if app["application_id"] in SUBMITTED_APP_IDS:
                 app["status"] = "Submitted"
+        return merged
     return data
 
 
@@ -35,6 +44,40 @@ def get_application(application_id: str):
     return app
 
 
+class NewApplicationRequest(BaseModel):
+    applicant: str
+    address: str
+    permit_type: str
+    request: str
+    parcel_id: Optional[str] = None
+
+
+@router.post("/api/stubs/applications")
+def create_application(body: NewApplicationRequest):
+    global _user_app_counter
+    _user_app_counter += 1
+    today = date.today().strftime("%Y-%m-%d")
+    year = date.today().year
+    app_number = 1000 + _user_app_counter
+    app_id = f"PRM-{year}-{app_number:04d}"
+
+    # Generate a parcel ID if not provided
+    parcel_id = body.parcel_id or f"USR-{app_number}-XX"
+
+    new_app = {
+        "application_id": app_id,
+        "applicant": body.applicant,
+        "address": body.address,
+        "parcel_id": parcel_id,
+        "permit_type": body.permit_type,
+        "request": body.request,
+        "submitted": today,
+        "status": "Pending Review",
+    }
+    USER_CREATED_APPS.append(new_app)
+    return new_app
+
+
 @router.post("/api/stubs/applications/{application_id}/submit")
 def submit_application(application_id: str):
     SUBMITTED_APP_IDS.add(application_id)
@@ -46,7 +89,18 @@ def get_gis(parcel_id: str):
     data = _load("gis_results.json")
     result = data.get(parcel_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Parcel not found")
+        # Return a generic response for user-created applications with unknown parcels
+        return {
+            "parcel_id": parcel_id,
+            "zone_classification": "R-2",
+            "zone_description": "Single Family Residential",
+            "lot_size_sqft": None,
+            "setback_rear_ft": 5,
+            "year_built": None,
+            "stories": None,
+            "last_updated": date.today().strftime("%Y-%m-%d"),
+            "_note": "Default zone — parcel not found in GIS registry",
+        }
     return result
 
 

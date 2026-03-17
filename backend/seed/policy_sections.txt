@@ -1,3 +1,21 @@
+==== SECTION 9.7 — TREE REMOVAL AND REPLACEMENT ====
+Zone applicability: All residential and mixed-use zones
+
+The removal of any tree with a trunk diameter exceeding six inches (6") measured
+at 4.5 feet above grade requires a Tree Removal Permit. Applicants must demonstrate
+that the tree presents a hazard, is diseased beyond treatment, or is required for
+an approved development. All removed trees must be replaced at a minimum 1:1 ratio
+(one replacement tree for each tree removed) with a species approved by the Urban
+Forestry Division. Replacement trees must be a minimum of 2-inch caliper at planting.
+
+Replacement exceptions:
+  Hazard tree with written arborist report: replacement may be reduced with discretionary review
+  Heritage tree (trunk > 24"): requires Planning Commission approval before removal
+
+constraint_value: 1:1
+Reference: Municipal Code §9.7, effective 2021-04-01
+
+
 ==== SECTION 14.3 — RESIDENTIAL FENCING STANDARDS ====
 Zone applicability: R-1, R-2, R-3
 
@@ -13,7 +31,61 @@ Maximum Heights by Zone:
   R-3: Rear/side 6ft | Front 4ft
 
 Variance threshold: any fence exceeding zone maximum requires Planning Commission approval.
+constraint_value: 6 ft
 Reference: Municipal Code §14.3, effective 2019-01-01
+
+
+==== SECTION 16.2 — DECK AND PATIO CONSTRUCTION ====
+Zone applicability: R-1, R-2, R-3
+
+Decks and patios attached to a primary residential structure are permitted by right
+provided they do not exceed thirty inches (30") in height above finished grade at
+any point. Decks exceeding 30 inches in height require a building permit and must
+meet setback requirements for the applicable zone. Rooftop decks are prohibited
+in R-1 zones. All decks must maintain a minimum 5-foot setback from side and rear
+property lines.
+
+Height measurement: vertical distance from finished grade to top of decking surface
+Permit threshold: >30 in above grade requires structural review
+constraint_value: 30 in
+Reference: Municipal Code §16.2, effective 2018-07-01
+
+
+==== SECTION 18.4 — HOME OCCUPATION STANDARDS ====
+Zone applicability: R-1, R-2, R-3
+
+Home occupations (business activities conducted from a residential dwelling) are
+permitted in residential zones subject to the following conditions: the occupation
+shall be clearly incidental and secondary to the residential use; no exterior
+evidence of the occupation shall be visible from the public right-of-way; no
+customers or clients shall visit the dwelling more than 6 times per day; no
+employees other than residents of the dwelling unit shall work on-site.
+
+Permitted uses in R-2: licensed professional services, tutoring, consulting,
+telecommuting, crafts and personal services with appointment-only clients.
+Prohibited uses: retail sales from premises, food preparation for commercial
+distribution, vehicle repair, any use generating excessive noise or traffic.
+
+constraint_value: Allowed
+Reference: Municipal Code §18.4, effective 2020-01-01
+
+
+==== SECTION 22.1 — SOLAR ENERGY SYSTEM STANDARDS ====
+Zone applicability: All zones
+
+Residential photovoltaic (PV) solar energy systems are permitted by right in all
+residential zones provided system capacity does not exceed twenty kilowatts (20 kW)
+AC output for single-family residential properties. Systems within the 20 kW cap
+require only a building/electrical permit — no discretionary planning approval.
+Systems exceeding 20 kW require Conditional Use Permit review.
+
+Rooftop systems must maintain a minimum 18-inch setback from all roof edges.
+Ground-mounted systems in residential zones shall not exceed 8 feet in height
+and must meet standard accessory structure setbacks.
+
+System cap for single-family residential: 20 kW AC
+constraint_value: 20 kW
+Reference: Municipal Code §22.1, effective 2023-01-01
 
 
 ==== SECTION 22.7 — COMMERCIAL SIGNAGE STANDARDS ====
@@ -27,6 +99,7 @@ Roof signs and rotating signs are prohibited in all commercial zones.
 
 Formula: max_sign_area = min(building_frontage_ft, 50)
 Units: square feet
+constraint_value: 32 sq ft
 Reference: Municipal Code §22.7, effective 2020-06-01
 
 
@@ -41,6 +114,7 @@ a compliance agreement executed prior to permit issuance.
 
 Pre-1980 trigger: year_built < 1980 → asbestos survey required
 Violation rule: open_violations > 0 → compliance agreement required before permit
+constraint_value: Required
 Reference: Municipal Code §31.2, effective 2015-03-15
 
 
@@ -58,6 +132,7 @@ ADU size limits:
   Attached ADU: maximum 50% of primary dwelling area
   Junior ADU: maximum 500 sq ft within existing structure
 
+constraint_value: 800 sq ft
 Reference: Municipal Code §8.4, as amended per SB-9 (2023)
 
 
@@ -73,4 +148,5 @@ Owner-occupancy verification: applicant name fuzzy-match against owner registry
 Fee calculation: based on bedroom count per current fee schedule
 Annual renewal required.
 
+constraint_value: 180 nights
 Reference: Municipal Code §19.1, effective 2022-09-01

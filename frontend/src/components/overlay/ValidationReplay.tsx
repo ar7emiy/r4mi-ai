@@ -1,6 +1,30 @@
 import { useState } from 'react'
 import { useR4miStore, AgentSpec } from '../../store/r4mi.store'
 
+// Per-permit-type expected field values for the validation replay animation.
+// These match the values the psst panel instructs users to enter.
+const WORKFLOW_VALUES: Record<string, { zone: string; constraint: string; notes: string }> = {
+  fence_variance:  { zone: 'R-2',     constraint: '6 ft',    notes: 'Exceeds R-2 max by 1ft. Variance required per §14.3.' },
+  solar_permit:    { zone: 'R-2',     constraint: '20 kW',   notes: 'System within residential 20kW cap. Compliant per §22.1.' },
+  home_occupation: { zone: 'R-2',     constraint: 'Allowed', notes: 'Home occupation permitted in R-2 zone per §18.4.' },
+  tree_removal:    { zone: 'R-2',     constraint: '1:1',     notes: 'Removal approved. 1:1 replacement required per §9.7.' },
+  deck_permit:     { zone: 'R-2',     constraint: '30 in',   notes: 'Deck height within 30in threshold per §16.2.' },
+  adu_addition:    { zone: 'R-3',     constraint: '800 sq ft', notes: 'ADU size within permitted limit. SB-9 compliant.' },
+  commercial_signage: { zone: 'C-1',  constraint: '32 sq ft', notes: 'Sign area within C-1 limit. Illumination approved.' },
+  demolition:      { zone: 'I-1',     constraint: 'Required', notes: 'Hazmat clearance required prior to demolition.' },
+  str_registration:{ zone: 'R-2',     constraint: '180 nights', notes: 'Primary residence. Within annual night cap.' },
+}
+
+function workflowValues(permitType?: string) {
+  return (
+    WORKFLOW_VALUES[permitType ?? ''] ?? {
+      zone: 'R-2',
+      constraint: 'Compliant',
+      notes: 'Auto-assessed per policy. Compliance verified.',
+    }
+  )
+}
+
 export function ValidationReplay({
     spec,
     onFinished,
@@ -19,30 +43,33 @@ export function ValidationReplay({
         setComplete(false)
         clearDemoSteps()
 
-        // Mimic the payoff typing animation
+        const wv = workflowValues(spec.permit_type)
+
         const INPUT_VERBS = new Set(['input', 'type', 'fill', 'enter', 'set', 'update', 'populate'])
         const steps = (spec.action_sequence ?? [])
             .filter((s) => INPUT_VERBS.has((s.action ?? '').toLowerCase()) || !!s.field)
             .map((s, i) => {
-                let value = ''
-                const field = s.field?.toLowerCase() || ''
-                const source = s.source?.toLowerCase() || ''
+                const field = s.field?.toLowerCase() ?? ''
+                const source = s.source?.toLowerCase() ?? ''
 
-                if (source.includes('gis') || field.includes('zone')) value = 'R-2'
-                else if (source.includes('policy') || source.includes('§') || source.includes('pdf')) {
-                    if (field.includes('height')) value = '6 ft'
-                    else if (field.includes('note') || field.includes('decision')) value = 'Height of 6ft is permitted.'
-                } else if (source.includes('owner') || field.includes('owner')) {
-                    value = 'Margaret Hollis'
+                let value = ''
+                if (source.includes('gis') || field.includes('zone')) {
+                    value = wv.zone
+                } else if (
+                    source.includes('policy') ||
+                    source.includes('§') ||
+                    source.includes('pdf')
+                ) {
+                    value = wv.constraint
                 } else if (field.includes('note') || field.includes('decision')) {
-                    value = 'Auto-assessed per policy. Compliance verified.'
+                    value = wv.notes
                 }
 
                 return {
                     step: i + 1,
                     action: s.action,
                     field: s.field,
-                    value: value,
+                    value,
                     source_tag: s.source,
                     confidence: 0.98,
                     status: 'ok',

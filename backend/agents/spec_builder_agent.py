@@ -110,7 +110,8 @@ knowledge_sources must accurately reflect the sources the agent will consult.
 
 MANDATORY FIELD NAMES — you MUST use exactly these `field` values in your action_sequence steps:
 - "zone_classification"  → for the step that looks up the parcel's zone from the GIS API
-- "max_permitted_height" → for the step that retrieves the maximum fence/structure height from policy
+- "max_permitted_height" → for the step that retrieves the applicable policy constraint value
+  (height limit, size cap, replacement ratio, or threshold — depends on permit type)
 - "decision_notes"       → for any decision, assessment, or notes step
 - "applicant_name"       → for any owner/applicant registry lookup step
 Use no other field names. Each step's `source` must clearly name the system (e.g. "GIS API", "PDF §14.3").

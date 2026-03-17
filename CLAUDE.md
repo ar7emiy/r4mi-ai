@@ -500,3 +500,4 @@ VISION_CACHE_TTL=300
 - Screenshots are cached per session_id + screen_name — invalidate on new session
 - DEMO_SESSION_SEED=true means 2 prior sessions exist at startup so the third live walkthrough immediately triggers READY
 - The UML activity diagram lives at `frontend/src/assets/system-diagram.mermaid` and is rendered at `/system` via mermaid npm package
+- The system must ALWAYS seek to align with the ethos of README.md - never hard coding optimizations or detections because the optimization detection must be authentic, automation tuning with HITL must be authentic, we must seek to create a platform that will be able to be UI agnostic even if right now we are testing it within a mock UI. 

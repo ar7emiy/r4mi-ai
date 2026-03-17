@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useR4miStore } from '../../store/r4mi.store'
+import { useAgentverse } from '../../hooks/useAgentverse'
 
 interface SourceTag {
   field: string
@@ -9,6 +10,31 @@ interface SourceTag {
 }
 
 const TYPING_DELAY_MS = 60
+
+// Per-permit-type field configuration
+const PERMIT_CONFIG: Record<string, {
+  constraintLabel: string
+  constraintPlaceholder: string
+  showFenceFields: boolean
+}> = {
+  fence_variance:  { constraintLabel: 'Max Permitted Height', constraintPlaceholder: 'ft',          showFenceFields: true  },
+  solar_permit:    { constraintLabel: 'Max System Size',       constraintPlaceholder: 'kW',          showFenceFields: false },
+  home_occupation: { constraintLabel: 'Allowed Use Finding',   constraintPlaceholder: 'Yes / No',    showFenceFields: false },
+  tree_removal:    { constraintLabel: 'Replacement Ratio',     constraintPlaceholder: '1:1 / waived',showFenceFields: false },
+  deck_permit:     { constraintLabel: 'Max Deck Height',       constraintPlaceholder: 'in',          showFenceFields: false },
+  adu_addition:    { constraintLabel: 'Max Unit Size',         constraintPlaceholder: 'sq ft',       showFenceFields: false },
+  commercial_signage: { constraintLabel: 'Max Sign Area',      constraintPlaceholder: 'sq ft',       showFenceFields: false },
+  demolition:      { constraintLabel: 'Clearance Required',    constraintPlaceholder: 'Yes / No',    showFenceFields: false },
+  str_registration:{ constraintLabel: 'Nights Per Year Limit', constraintPlaceholder: 'nights',      showFenceFields: false },
+}
+
+function getPermitConfig(permitType?: string) {
+  return PERMIT_CONFIG[permitType ?? ''] ?? {
+    constraintLabel: 'Max Permitted Value',
+    constraintPlaceholder: '',
+    showFenceFields: false,
+  }
+}
 
 async function typeValue(
   value: string,
@@ -23,8 +49,11 @@ async function typeValue(
 export function ApplicationForm() {
   const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
   const demoSteps = useR4miStore((s) => s.demoSteps)
-  const publishedAgents = useR4miStore((s) => s.publishedAgents)
+  const storeAgents = useR4miStore((s) => s.publishedAgents)
   const clearDemoSteps = useR4miStore((s) => s.clearDemoSteps)
+  const { data: fetchedAgents = [] } = useAgentverse()
+  // Prefer SSE-populated store; fall back to DB fetch (survives page reload)
+  const publishedAgents = storeAgents.length ? storeAgents : fetchedAgents
 
   const { data: app } = useQuery({
     queryKey: ['application', activeApplicationId],
@@ -146,6 +175,7 @@ export function ApplicationForm() {
   }
 
   const match = app && publishedAgents.find((a) => a.permit_type === app.permit_type)
+  const permitCfg = getPermitConfig(app?.permit_type)
 
   function handleAutomate() {
     if (match && activeApplicationId) {
@@ -202,27 +232,31 @@ export function ApplicationForm() {
           sourceTag={getSourceTag('zone')}
           testId="field-zone"
         />
+        {permitCfg.showFenceFields && (
+          <FormRow
+            label="Fence Height Requested"
+            value={fenceHeight}
+            onChange={setFenceHeight}
+            placeholder="ft"
+          />
+        )}
         <FormRow
-          label="Fence Height Requested"
-          value={fenceHeight}
-          onChange={setFenceHeight}
-          placeholder="ft"
-        />
-        <FormRow
-          label="Max Permitted Height"
+          label={permitCfg.constraintLabel}
           value={maxHeight}
           onChange={setMaxHeight}
           required
-          placeholder="ft"
+          placeholder={permitCfg.constraintPlaceholder}
           sourceTag={getSourceTag('max_height')}
           testId="field-max-height"
         />
-        <FormRow
-          label="Variance Required"
-          value={varianceRequired}
-          onChange={setVarianceRequired}
-          placeholder="Yes / No"
-        />
+        {permitCfg.showFenceFields && (
+          <FormRow
+            label="Variance Required"
+            value={varianceRequired}
+            onChange={setVarianceRequired}
+            placeholder="Yes / No"
+          />
+        )}
       </fieldset>
 
       <fieldset style={fieldsetStyle}>
