@@ -17,6 +17,24 @@ r4mi sits alongside workers inside information intake systems — permit offices
 
 ---
 
+## The Design Philosophy: Narrow, Transparent, Composable
+
+Most AI automation efforts fail for the same reason: they ask workers to stop, describe their expertise in the abstract, and hand it over to a system they don't control. r4mi inverts this entirely.
+
+**Human-in-the-loop that costs nothing.**
+Workers never step outside their normal day to configure or train anything. r4mi watches them work, then at the right moment surfaces a confirmation panel: *"We noticed you've done this 3 times. Is this the sequence? Is this where you were looking for information?"* The worker spends thirty seconds confirming what they already know — not explaining it from scratch, not filling out a training form, not sitting in a workflow documentation session. The AI already watched it happen. They just confirm.
+
+**Narrow by design.**
+Each agent does exactly one thing. Not "handle residential permit applications" — more like "check fence-variance zoning rules for R-2 lots and pre-fill height limits from the PDF policy document." This narrowness is the whole point. A narrow agent is trustworthy because its behavior is auditable. It's composable because it fits cleanly under or beside other narrow agents. And it degrades gracefully — if a case is outside scope, it doesn't act.
+
+**Composability through Agentverse.**
+Once an agent is published, it becomes a building block. Another worker — or anyone in the network — can take that agent, fork it, tune it for their jurisdiction or edge case, and re-publish it. Every fork tracks its lineage. Attribution is preserved at every level of the stack: who built the original, who refined it, how much of the downstream value derives from each contribution. Workers don't just automate their own repetitive work — they codify domain expertise that compounds across an entire network of people facing the same problems.
+
+**The economic layer (coming).**
+The contribution graph that Agentverse tracks today is the foundation for a smart contract-based incentive system. When an organization pays to use r4mi's agent network, the value flows back to the contributors whose agents are doing the work — proportional to usage, traceable to the fork chain. A permit technician in Portland who built the original fence-variance agent earns passive income when an equivalent workflow runs in a different city, built on their foundation. Domain expertise, finally, as an asset class.
+
+---
+
 ## How the Intelligence Works
 
 The AI calls in r4mi are genuine — not templates, not hardcoded rules.
