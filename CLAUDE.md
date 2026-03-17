@@ -25,7 +25,7 @@ r4mi-ai is a **UI workflow observation and automation factory**. It watches a hu
 
 ## The Most Important Design Decision: Real AI vs Scaffolded
 
-This distinction is critical. Judges will look at the code. Everything must be technically honest.
+This distinction is critical. Everything must be technically honest.
 
 ### REAL Gemini API calls — do not fake these
 
@@ -81,7 +81,7 @@ generates the NarrowAgentSpec. Output is real LLM reasoning, not a template fill
 When the user types a correction, it is appended to the SpecBuilderAgent prompt
 and the spec is genuinely regenerated. The new spec is a real Gemini output.
 
-### SCAFFOLDED — explicitly allowed, judges understand this
+### SCAFFOLDED — explicitly allowed
 
 - Stub APIs for GIS, code enforcement, owner registry, sewer/water — JSON seed files
 - Pre-seeded prior sessions for demo setup (DEMO_SESSION_SEED=true)
@@ -131,7 +131,7 @@ This is how the demo proves the AI is real without stopping the narrative.
 - Frontend `CLIPanel.tsx` is a dark scrolling `<pre>` component consuming `/api/logs`
 - Every Gemini call logs: model name, token count, latency, result summary
 
-**The `/evidence` route** shows the full proof for judges who want depth:
+**The `/evidence` route** shows the full technical proof for anyone who wants depth:
 - Three session action traces side by side
 - Real cosine similarity matrix with scores and threshold line highlighted
 - Embedding model name, dimensions, token counts

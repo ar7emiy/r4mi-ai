@@ -157,7 +157,7 @@ The contrast between these two layers communicates the product's value without w
 - Diagram centered with padding
 - Title: "r4mi-ai System Architecture" in white
 - Accessible from a small "?" or "Architecture" link in the Tab Progression Bar
-- Not part of the main demo — supplementary for judges who want depth
+- Supplementary deep-dive — accessible from the Tab Progression Bar
 
 ---
 
