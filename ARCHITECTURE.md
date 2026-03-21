@@ -9,9 +9,10 @@ Each decision includes rationale so context is never lost.
 
 - **No Chatwoot** — replaced by a purpose-built mock legacy permit UI
 - **No real database integrations** — all external systems are stub APIs reading from JSON
-- **No browser extension** — UI event capture is simulated via a test harness that POSTs mock UIEvent sequences
 - **No authentication system** — single hardcoded user for the demo
 - **No cloud deployment** — everything runs locally via Docker Compose for the demo
+
+**capture.js exists and is the real capture layer.** `frontend/public/capture.js` is a vanilla JS DOM observer included in `index.html` via a single script tag. It listens to real DOM events, extracts `element_context` from ARIA labels/roles/landmarks, and POSTs enriched UIEvents to `/api/observe`. It only activates when the host sets `data-session-id` on `<body>`, so the React test harness and E2E suite are unaffected. This is the enterprise integration model.
 
 ---
 
@@ -90,22 +91,32 @@ State persists in SQLite. Each session has its own state machine instance.
 **Four agents:**
 
 ### ObserverAgent
-- Receives UIEvent stream
-- Uses Gemini Vision to identify unstructured text regions in screenshots
-- Runs pattern state machine
-- Emits `OPTIMIZATION_OPPORTUNITY` SSE event when pattern is ready
+- Receives UIEvent stream from `/api/observe`
+- In teach-me mode (`capture_mode="teach"`): calls StepLabeller for Gemini-generated step descriptions per event
+- Uses Gemini Vision to identify unstructured text regions in screenshots (on `screen_switch` events)
+- Runs pattern state machine (COLLECTING → FINGERPRINTING → COMPARING → CANDIDATE → READY)
+- On pattern READY: MarketMatcher runs automatically — emits `AGENT_MATCH_FOUND` if match ≥ 0.85, else `OPTIMIZATION_OPPORTUNITY`
+- On `OPTIMIZATION_OPPORTUNITY`: kicks off SpecBuilderAgent as a background task (pre-generation)
 
 ### SpecBuilderAgent
-- Input: confirmed action trace + confirmed knowledge sources
-- Output: `NarrowAgentSpec` JSON
-- Must produce valid JSON matching the schema — use structured output mode
-- Also handles the correction flow: receives typed correction text, regenerates spec
+- Input: confirmed action trace + confirmed knowledge sources; optionally a correction string
+- Uses `gemini-2.5-flash` with structured output (JSON schema enforced)
+- Prompt is causally threaded: for each input event, includes which knowledge source the worker had just read and what it said — this is the structural advantage over macro recorders
+- Pre-generation: runs as `asyncio.create_task` with its own `Session(engine)` — safe after request closes
+- Also handles the correction flow: appends correction to prompt, regenerates spec via real Gemini call
 
 ### MarketMatcher
-- Input: new `NarrowAgentSpec` candidate
-- Uses Gemini embedding API to generate spec embeddings
-- Cosine similarity search over published spec embeddings
-- Returns match if similarity > 0.85, with contribution metadata
+- Now runs at PATTERN READY time, not at publish time
+- Input: session trace embedding (`list[float]`) via `find_match_by_vector()`
+- Cosine similarity of trace embedding vs all published spec embeddings
+- Returns `(NarrowAgentSpec, score)` if score ≥ 0.85, else None
+- The comparison is trace-vs-spec (different text representations). Log scores in CLI panel — tune `AGENTVERSE_MATCH_THRESHOLD` if scores are systematically below 0.85
+
+### StepLabeller (new)
+- Called from ObserverAgent for teach-mode events (`capture_mode="teach"`)
+- One Gemini Flash micro-call per event: generates a one-line natural language description of the step
+- `STEP_LABEL_MODE=realtime` (default) | `batch` — batch defers all labels to session end
+- Labels stored in `UIEvent.step_description`, passed to SpecBuilderAgent for richer prompts
 
 ### NarrowAgent
 - Input: published `NarrowAgentSpec` + current permit application data
@@ -118,22 +129,26 @@ State persists in SQLite. Each session has its own state machine instance.
 ## Data Flow
 
 ```
-Browser (mock legacy UI)
-  → user interacts with permit form
-  → UIEvent POSTed to /api/observe (simulated by test harness in demo)
-  → ObserverAgent processes event stream
+Browser (mock legacy UI + capture.js or synthetic test harness)
+  → UIEvent POSTed to /api/observe
+  → ObserverAgent: accumulates events, vision on screen_switch, step label on teach-mode
   → Pattern state machine advances
-  → When READY: SSE event sent to frontend
-  → TabProgressionBar shows notification tab
-  → User opens tab, GET /api/session/{id}/replay
-  → Frontend plays back replay frames
-  → User confirms: POST /api/session/{id}/confirm/sequence
-  → User confirms sources: POST /api/session/{id}/confirm/sources
-  → MarketMatcher runs: GET /api/agents/match
-  → If match: NarrowAgent demo streams via SSE
-  → User tunes (optional): POST /api/agents/{id}/tune
-  → Publish: POST /api/agents/publish
-  → SSE: AGENT_PUBLISHED event to all connected clients
+  → When READY:
+      MarketMatcher.find_match_by_vector(trace_embedding, db)
+        → match found:  SSE AGENT_MATCH_FOUND  → adopt card in OptimizationPanel
+        → no match:     SSE OPTIMIZATION_OPPORTUNITY
+                        asyncio.create_task(_pre_generate_spec(session_id))
+                          → gemini-2.5-flash builds NarrowAgentSpec
+                          → stored in session.candidate_spec_draft
+                          → SSE SPEC_GENERATED (spec available before user opens panel)
+  → TabProgressionBar shows notification badge (green=adopt, indigo=build)
+  → User opens panel:
+      adopt path:  Activate Agent → ValidationReplay with matched spec
+                   Fork & Customise → enters build path with matched spec pre-loaded
+      build path:  SessionReplay → CorrectionInput → SpecSummary (no spinner — already generated)
+                   → ValidationReplay → POST /api/agents/publish
+                   → SSE AGENT_PUBLISHED → agent card in AgentversePanel
+  → Subsequent READY for same permit type: MarketMatcher finds published spec → AGENT_MATCH_FOUND
 ```
 
 ---
@@ -161,19 +176,20 @@ No other services. No Redis. No Elasticsearch. No Chatwoot.
 ## Environment Variables
 
 ```bash
-GEMINI_API_KEY=                      # required
+GEMINI_API_KEY=                         # required
 GOOGLE_GENAI_USE_VERTEXAI=false
 DATABASE_URL=sqlite:///./r4mi.db
-PATTERN_THRESHOLD=3                  # sessions before pattern is READY
-PATTERN_CONFIDENCE_MIN=0.75
+PATTERN_THRESHOLD=3                     # sessions before pattern is READY
+PATTERN_CONFIDENCE_MIN=0.85
 AGENTVERSE_MATCH_THRESHOLD=0.85
 TRUST_PROMOTION_MIN_RUNS=10
 TRUST_PROMOTION_MAX_FAILURE_RATE=0.05
 DEMO_USER_ID=permit-tech-001
-DEMO_SESSION_SEED=true               # if true, pre-load 2 completed sessions on startup
+DEMO_SESSION_SEED=true                  # pre-loads 2 seeded sessions per workflow type on startup
+VISION_CACHE_TTL=300
+STEP_LABEL_MODE=realtime                # realtime | batch (batch defers step labels to session end)
 ```
 
-`DEMO_SESSION_SEED=true` is critical — it means when the demo starts, the pattern
-detector already has 2 prior sessions logged, so the first live walkthrough
-immediately triggers the READY state. Without this the demo would require 3 full
-walkthroughs before anything happens.
+`DEMO_SESSION_SEED=true` pre-loads 2 completed sessions (per workflow type) on startup so the first live submission immediately triggers READY state. No agents are pre-seeded — the first run builds and publishes, the second run triggers the adopt path.
+
+**DB reset required** when upgrading from a version that used `gemini-embedding-001`. Delete `backend/r4mi.db` before the first run — `DEMO_SESSION_SEED=true` will re-create and re-embed everything with `text-embedding-004`.

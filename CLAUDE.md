@@ -16,7 +16,7 @@ r4mi-ai is a **UI workflow observation and automation factory**. It watches a hu
 
 **What is NOT being built:**
 - No Chatwoot — replaced by a purpose-built mock legacy permit UI (see DESIGN.md)
-- No browser extension — UI event capture is simulated by a test harness
+- capture.js exists as a real DOM observer in `frontend/public/` — activated by setting `data-session-id` on `<body>`; E2E test harness omits this attribute so synthetic POSTs are unaffected
 - No real external APIs — all external systems are stubs reading from JSON seed files
 - No authentication — single hardcoded demo user
 - No cloud deployment — Docker Compose, runs locally
@@ -264,11 +264,16 @@ r4mi-ai/
 │   │   ├── pattern_detector.py
 │   │   ├── embedding_service.py    ← wraps Gemini embedding + cosine math
 │   │   ├── vision_service.py       ← wraps Gemini Vision + caching
+│   │   ├── step_labeller.py        ← Gemini micro-call per teach-mode event
+│   │   ├── sse_bus.py              ← SSE broadcast bus (imported by services + routers)
 │   │   ├── trust_engine.py
 │   │   └── log_streamer.py         ← logging handler → SSE
 │   └── db.py
 │
 └── frontend/
+    ├── public/
+    │   └── capture.js              ← vanilla JS DOM observer (enterprise drop-in)
+    ├── index.html
     └── src/
         ├── components/
         │   ├── legacy/
@@ -308,12 +313,16 @@ class UIEvent(BaseModel):
     session_id: str
     user_id: str
     timestamp: datetime
-    event_type: Literal["click", "navigate", "input", "screen_switch", "submit"]
+    event_type: Literal["click", "navigate", "input", "screen_switch", "submit", "hover", "scroll", "copy"]
     screen_name: str
     element_selector: str
     element_value: Optional[str] = None
     backend_call: Optional[dict] = None
     screenshot_b64: Optional[str] = None   # included on screen_switch events only
+    element_context: Optional[dict] = None  # {label, role, text, position, landmark} — extracted by capture.js
+    capture_mode: Optional[Literal["obs", "teach"]] = "obs"  # "teach" enables StepLabeller
+    step_description: Optional[str] = None  # Gemini-generated label (teach mode, realtime or batch)
+    is_input_variable: Optional[bool] = None  # True for user-entered values (varies per case, excluded from trace hash)
 ```
 
 ### ActionTrace
@@ -363,6 +372,7 @@ class SSEEventType(str, Enum):
     SPEC_GENERATED            = "SPEC_GENERATED"
     SPEC_UPDATED              = "SPEC_UPDATED"
     AGENT_DEMO_STEP           = "AGENT_DEMO_STEP"
+    AGENT_MATCH_FOUND         = "AGENT_MATCH_FOUND"
     AGENT_PUBLISHED           = "AGENT_PUBLISHED"
     AGENT_RUN_COMPLETE        = "AGENT_RUN_COMPLETE"
     AGENT_EXCEPTION           = "AGENT_EXCEPTION"
@@ -486,6 +496,7 @@ TRUST_PROMOTION_MAX_FAILURE_RATE=0.05
 DEMO_USER_ID=permit-tech-001
 DEMO_SESSION_SEED=true                  # pre-loads 2 sessions — required for demo
 VISION_CACHE_TTL=300
+STEP_LABEL_MODE=realtime                # realtime | batch (batch defers step labels to session end)
 ```
 
 ---
@@ -498,6 +509,10 @@ VISION_CACHE_TTL=300
 - Never mutate a published NarrowAgentSpec — always fork (set parent_spec_id)
 - Frontend never polls — all updates via SSE
 - Screenshots are cached per session_id + screen_name — invalidate on new session
+- SSE broadcast goes through `services/sse_bus.py` — never import from `routers/` inside services (circular import)
+- Background tasks (`asyncio.create_task`) must create their own `Session(engine)` — never reuse a request-scoped db session
+- **DB reset required** when changing embedding models — delete `backend/r4mi.db`; `DEMO_SESSION_SEED=true` will recreate and re-embed
 - DEMO_SESSION_SEED=true means 2 prior sessions exist at startup so the third live walkthrough immediately triggers READY
+- MarketMatcher runs at PATTERN READY time (detection), not at publish time — `find_match_by_vector(trace_embedding, db)` fires before SpecBuilderAgent
 - The UML activity diagram lives at `frontend/src/assets/system-diagram.mermaid` and is rendered at `/system` via mermaid npm package
 - The system must ALWAYS seek to align with the ethos of README.md - never hard coding optimizations or detections because the optimization detection must be authentic, automation tuning with HITL must be authentic, we must seek to create a platform that will be able to be UI agnostic even if right now we are testing it within a mock UI. 

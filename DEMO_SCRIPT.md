@@ -199,6 +199,41 @@ A brief cut to the Agentverse panel showing the published agent with its metadat
 
 ---
 
+## Scenario A — Adopt Path (Second Run, same permit type)
+
+This scenario plays out automatically the second time the same permit type is submitted
+**after** an agent has already been published (i.e. Beat 5 has completed).
+No script change is needed — the system detects the published agent via MarketMatcher.
+
+**Setup:**
+- One run of Beats 1–5 has already completed — "Fence Variance — R-2 Zone Check" is published
+- Operator opens a new fence variance application (`PRM-2024-0042`)
+
+**What happens (no extra UI steps required):**
+1. Operator works normally through the permit (Beat 1 actions repeat)
+2. On submit, `pattern_detector` runs MarketMatcher at READY state
+3. MarketMatcher finds the published spec — cosine similarity ≥ 0.85
+4. Backend emits `AGENT_MATCH_FOUND` SSE event (not `OPTIMIZATION_OPPORTUNITY`)
+5. Tab Progression Bar badge turns **green**: "We found an agent for this"
+6. Operator clicks the badge — Optimization Panel opens in **adopt mode**:
+   - Shows agent card: name, trust badge (orange = SUPERVISED), run count, match score
+   - Two CTAs: **"Activate Agent"** (runs the agent immediately) | **"Fork & Customise"** (enters build path with pre-loaded spec)
+7. Operator clicks "Activate Agent" — NarrowAgent executes, fields auto-fill (Beat 6 animation)
+8. Tab Progression Bar: "✅ Agent: Fence Variance — completed"
+
+**Key difference from build path:**
+- No replay, no correction, no spec generation spinner — agent already exists
+- `SPEC_GENERATED` SSE is never sent on the adopt path (no pre-generation needed)
+- "Fork & Customise" is the escape hatch if the operator wants to tune the matched agent
+
+**UI requirements specific to adopt path:**
+- `OptimizationPanel` renders adopt card when `store.matchedAgent` is set
+- Green badge in `TabProgressionBar` (distinct from indigo build-path badge)
+- Trust badge colours: SUPERVISED = orange, AUTONOMOUS = green, STALE = grey
+- Match score displayed as a percentage (e.g. "91% match")
+
+---
+
 ## What This Demo Proves
 
 1. The system observes without interrupting
