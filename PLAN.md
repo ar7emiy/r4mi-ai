@@ -248,23 +248,53 @@ Three full interaction walkthroughs showing the target experience from both user
 
 ---
 
-## 5. Open Questions
+## 5. Decisions
 
-Decisions needed before implementation begins.
+All open questions resolved.
 
-**Q1 — MarketMatcher similarity metric**
-Should the adopt-path comparison be trace-vs-trace (current session embedding vs all prior sessions of same `permit_type`) or trace-vs-spec (current session trace vs published spec text)? Trace-vs-trace is more sensitive to workflow similarity; trace-vs-spec is more sensitive to capability overlap.
-**Recommendation:** trace-vs-spec — specs are already embedded and this avoids a secondary embedding call.
+**Q1 — MarketMatcher similarity metric: trace-vs-spec ✓**
+The adopt-path comparison runs the current session's trace embedding against published NarrowAgentSpec embeddings (spec text: name + description + action sequence). Spec embeddings are already computed at publish time, so no extra API call is needed. Trace-vs-spec answers "does this agent's stated capability cover what I just observed?" — which is exactly the right question for the adopt path.
 
-**Q2 — Adopt-path trust threshold**
-Should the adopt path activate for SUPERVISED agents, or only AUTONOMOUS? A SUPERVISED agent has fewer than 10 confirmed runs and could auto-fill incorrectly.
-**Recommendation:** show adopt path for all trust levels but require explicit step confirmation for SUPERVISED agents.
+**Q2 — Trust levels and human confirmation ✓**
+There is always a user-facing prompt before automation executes — no silent autonomous mode. The distinction between trust levels is the *weight* of confirmation required:
 
-**Q3 — Teach-me mode activation**
-Is teach-me mode only available in the correction flow (invoked from OptimizationPanel), or can users also trigger it manually as a record button — creating agents for workflows the system hasn't yet detected as repetitive?
+- **SUPERVISED** (new agent, <10 runs): confirm each individual step as it executes — e.g. "About to fill zone field with R-2 from GIS API. Proceed?"
+- **AUTONOMOUS** (proven agent, high success rate): single upfront prompt covering the whole workflow — "Automation available. Run it?" — then all steps execute in one pass.
 
-**Q4 — Step labelling latency**
-The plan uses `gemini-2.5-flash` for step descriptions in teach-me mode. This adds latency and cost per UIEvent. Consider batching step descriptions at session end rather than real-time. Real-time is better UX; batch is cheaper and simpler.
+Color coding communicates trust at a glance: orange badge for SUPERVISED, green for AUTONOMOUS. The adopt card shows run count and trust level so the user can make an informed choice before activating.
 
-**Q5 — Site-agnostic capture layer timeline**
-The JS capture snippet (P3) is an XL item. Is there value in shipping a bookmarklet first (lower polish, faster to build) to validate the site-agnostic concept on real government portals before investing in a full extension?
+**Q3 — Teach-me mode activation: both ✓**
+Teach-me mode is available in two ways:
+1. **Correction flow** — "Show me" button on a specific step in OptimizationPanel, for correcting a step in an already-detected pattern.
+2. **Standalone record button** — user can initiate proactively before the system has detected three similar sessions. Power users who know they'll repeat a workflow can build the agent immediately.
+
+**Q4 — Step labelling: real-time with batching option ✓**
+Default: Gemini generates the step label immediately after each UIEvent in teach-me mode. Labels appear in the CLI panel as the user acts. A config flag (`STEP_LABEL_MODE=batch`) switches to batch mode — all labels generated at session end. Same code path, just deferred. Batch mode for cost-sensitive deployments.
+
+**Q5 — Demo capture strategy: `capture.js` script tag ✓**
+This is an enterprise product — the host cooperates by including a script tag. The right demo path is to build `capture.js` as a self-contained vanilla JS observer (~150 lines) that:
+- Listens to real DOM events (clicks, inputs, form submissions, navigation)
+- Extracts `element_context` from the actual DOM (ARIA labels, roles, landmark)
+- POSTs enriched UIEvents to `/api/observe` automatically
+
+Included in the mock permit UI via:
+```html
+<script src="/capture.js" data-api="http://localhost:8000"></script>
+```
+
+This is exactly the enterprise integration model — one script tag, one config attribute, zero changes to the host app. The demo and the product are the same thing. File lives at `frontend/public/capture.js` so Vite serves it as a static asset. Replaces the synthetic test harness for live demos while the E2E suite continues using seeded events.
+
+The `capture.js` item is promoted from P3 to **P1** given it directly enables authentic demo capture and validates the enterprise integration model early.
+
+---
+
+## 6. Enterprise Integration Model
+
+r4mi-ai is designed as an enterprise product where the host application cooperates with the observer. This means:
+
+- The host includes `capture.js` via a script tag — no browser extension required, no IT approval process beyond a script deployment
+- Agents and specs stay **host-agnostic** — they reference semantic field identities (`zone_classification`, `max_permitted_height`) not UI-specific selectors (`#form > div:nth-child(3) > input`)
+- The host exposes stable semantic names for fields it wants to be automatable — this is the cooperation surface, kept deliberately minimal
+- `capture.js` derives `screen_name` from URL + ARIA landmarks, not from application-defined constants — no r4mi-specific code needs to be written per deployment
+
+The goal is: one `capture.js` drop-in works across any web-based back-office system. Agents built on one deployment can be matched and adopted by another deployment of the same workflow type.
