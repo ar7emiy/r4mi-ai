@@ -66,15 +66,43 @@ class SpecBuilderAgent:
         session: SessionRecord,
         correction: Optional[str] = None,
     ) -> str:
-        events_summary = "\n".join(
-            f"  - [{e.get('event_type')}] screen={e.get('screen_name')} "
-            f"element={e.get('element_selector')} value={e.get('element_value', '')}"
-            for e in (session.events or [])
-        )
+        # Build a causally-threaded event summary: for teach-mode events, include
+        # step_description (Gemini-generated label) and the active knowledge source.
+        sources = session.confirmed_sources or session.knowledge_sources or []
+        active_source: Optional[dict] = None
+        event_lines = []
+        for e in (session.events or []):
+            # Track the last knowledge source seen before this event
+            if e.get("screen_name") in ("POLICY_REFERENCE", "CODE_ENFORCEMENT"):
+                for s in sources:
+                    if s.get("screen_name") == e.get("screen_name"):
+                        active_source = s
+                        break
+
+            step_desc = e.get("step_description", "")
+            causal = ""
+            if active_source and e.get("event_type") == "input":
+                causal = (
+                    f" [worker had just read: \"{active_source.get('text_snippet', '')[:80]}\" "
+                    f"from {active_source.get('selector_description', '')} "
+                    f"conf={active_source.get('confidence', 0):.2f}]"
+                )
+
+            line = (
+                f"  - [{e.get('event_type')}] screen={e.get('screen_name')} "
+                f"element={e.get('element_selector')} value={e.get('element_value', '')}"
+            )
+            if step_desc:
+                line += f"\n    description: {step_desc}"
+            if causal:
+                line += f"\n    causal context:{causal}"
+            event_lines.append(line)
+
+        events_summary = "\n".join(event_lines)
         sources_summary = "\n".join(
             f"  - [{s.get('source_type')}] {s.get('selector_description')} "
             f"(conf={s.get('confidence', 0):.2f}): {s.get('text_snippet', '')[:100]}"
-            for s in (session.confirmed_sources or session.knowledge_sources or [])
+            for s in sources
         )
         correction_block = ""
         if correction:
@@ -108,13 +136,13 @@ Be specific about which API endpoints and policy sections to use.
 The action_sequence should be 2-4 steps maximum.
 knowledge_sources must accurately reflect the sources the agent will consult.
 
-MANDATORY FIELD NAMES — you MUST use exactly these `field` values in your action_sequence steps:
-- "zone_classification"  → for the step that looks up the parcel's zone from the GIS API
-- "max_permitted_height" → for the step that retrieves the applicable policy constraint value
-  (height limit, size cap, replacement ratio, or threshold — depends on permit type)
-- "decision_notes"       → for any decision, assessment, or notes step
-- "applicant_name"       → for any owner/applicant registry lookup step
-Use no other field names. Each step's `source` must clearly name the system (e.g. "GIS API", "PDF §14.3").
+FIELD NAMING RULES:
+- Use snake_case field names that describe the semantic purpose of the field for this specific permit type.
+- Well-known field names to reuse when applicable: "zone_classification" (GIS parcel zone lookup),
+  "max_permitted_height" (fence/structure height limit), "decision_notes" (final assessment notes),
+  "applicant_name" (owner/applicant registry lookup). For other permit types, choose descriptive names.
+- Each step's `source` MUST clearly name the system or document (e.g. "GIS API", "PDF §14.3",
+  "Municipal Code §9.7", "Fee Schedule", "Owner Registry"). This is critical for agent execution.
 
 Return valid JSON matching the schema. No markdown, no explanation.
 """
@@ -128,12 +156,12 @@ Return valid JSON matching the schema. No markdown, no explanation.
         token_estimate = len(prompt.split())
 
         logger.info(
-            f"[SpecBuilder] gemini-2.5-flash-lite called (prompt: ~{token_estimate} tokens)"
+            f"[SpecBuilder] gemini-2.5-flash called (prompt: ~{token_estimate} tokens)"
         )
         t0 = time.time()
 
         response = await self.client.aio.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-2.5-flash",
             contents=prompt,
             config={
                 "response_mime_type": "application/json",

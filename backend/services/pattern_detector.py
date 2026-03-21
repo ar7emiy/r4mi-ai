@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import os
 from typing import Optional
 
@@ -8,6 +9,7 @@ from models.session import SessionRecord, PatternState
 from models.event import ActionTrace, UIEvent, SSEEventType
 from services.embedding_service import embedding_service
 from services.log_streamer import logger
+from agents.market_matcher import market_matcher
 
 PATTERN_THRESHOLD = int(os.getenv("PATTERN_THRESHOLD", "3"))
 PATTERN_CONFIDENCE_MIN = float(os.getenv("PATTERN_CONFIDENCE_MIN", "0.85"))
@@ -92,7 +94,24 @@ class PatternDetector:
                 f"[Detector]  Pattern READY — {matches}/{len(prior_sessions)} sessions "
                 f"exceed similarity threshold"
             )
+
+            # Market-first: check for an existing published agent before building
+            logger.info("[MarketMatcher] Checking published agents for existing match...")
+            match_result = await market_matcher.find_match_by_vector(vector, db)
+            if match_result:
+                matched_spec, match_score = match_result
+                logger.info(
+                    f"[SSE]       → AGENT_MATCH_FOUND | spec='{matched_spec.name}' "
+                    f"score={match_score} trust={matched_spec.trust_level}"
+                )
+                session.matched_spec_id = matched_spec.id
+                db.add(session)
+                db.commit()
+                return SSEEventType.AGENT_MATCH_FOUND
+
             logger.info(f"[SSE]       → OPTIMIZATION_OPPORTUNITY sent to frontend")
+            # Kick off spec pre-generation so the panel has a draft ready immediately
+            asyncio.create_task(_pre_generate_spec(session.session_id))
             return SSEEventType.OPTIMIZATION_OPPORTUNITY
         else:
             session.state = PatternState.CANDIDATE
@@ -106,3 +125,36 @@ class PatternDetector:
 
 
 pattern_detector = PatternDetector()
+
+
+async def _pre_generate_spec(session_id: str) -> None:
+    """
+    Background task: build a NarrowAgentSpec draft from the completed session and
+    store it on SessionRecord.candidate_spec_draft. Fires SPEC_GENERATED SSE when done.
+    Uses its own DB session — safe to run after the originating request has completed.
+    """
+    from db import engine  # avoid circular at module level
+    from agents.spec_builder_agent import spec_builder_agent
+    from services.sse_bus import sse_bus
+
+    logger.info(f"[SpecBuilder] Pre-generating spec for session {session_id}...")
+    try:
+        with Session(engine) as db:
+            session = db.get(SessionRecord, session_id)
+            if not session:
+                logger.warning(f"[SpecBuilder] Session {session_id} not found for pre-generation")
+                return
+
+            spec = await spec_builder_agent.build_spec(session)
+
+            session.candidate_spec_draft = spec.model_dump(mode="json")
+            db.add(session)
+            db.commit()
+
+        logger.info(f"[SpecBuilder] Draft stored for session {session_id} — name='{spec.name}'")
+        await sse_bus.publish(
+            SSEEventType.SPEC_GENERATED,
+            {"session_id": session_id, "spec": spec.model_dump(mode="json")},
+        )
+    except Exception as exc:
+        logger.error(f"[SpecBuilder] Pre-generation failed for {session_id}: {exc}")

@@ -32,6 +32,8 @@ class SessionRecord(SQLModel, table=True):
     confirmed_sequence: Optional[list] = Field(default=None, sa_column=Column(JSON))
     confirmed_sources: Optional[list] = Field(default=None, sa_column=Column(JSON))
     generated_spec_id: Optional[str] = None
+    matched_spec_id: Optional[str] = None  # set when AGENT_MATCH_FOUND fires
+    candidate_spec_draft: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     started_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
     is_seeded: bool = False

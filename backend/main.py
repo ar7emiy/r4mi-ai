@@ -8,12 +8,12 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import Session, select
+from sqlmodel import Session
+from sqlalchemy import text
 
 from db import create_db_and_tables, engine
 from services.log_streamer import logger
 from models.session import SessionRecord, PatternState
-from models.agent_spec import NarrowAgentSpec, TrustLevel
 from models.event import UIEvent, ActionTrace
 
 # ── routers ──────────────────────────────────────────────────────────────────
@@ -211,91 +211,33 @@ async def _seed_demo_sessions():
             )
 
 
-async def _seed_demo_agent():
-    """
-    Pre-publish one fence_variance NarrowAgentSpec so the ⚡ Automate button
-    is available immediately on fresh start without running the full publish flow.
-    """
-    from services.embedding_service import embedding_service
 
-    SEED_SPEC_ID = "spec_seed_fence_variance_v1"
-    with Session(engine) as db:
-        existing = db.get(NarrowAgentSpec, SEED_SPEC_ID)
-        if existing:
-            logger.info("[Seed] Demo agent spec already exists, skipping")
-            return
-
-        spec_text = (
-            "Fence Variance Permit Processor automates fence variance permit "
-            "processing zone_classification max_permitted_height decision_notes GIS API PDF §14.3"
-        )
-        vector = await embedding_service.embed(spec_text, cache_key="spec:seed:fence_variance_v1")
-
-        spec = NarrowAgentSpec(
-            id=SEED_SPEC_ID,
-            name="Fence Variance Permit Processor",
-            description=(
-                "Processes fence variance permit applications by checking zone "
-                "classification and maximum permitted height from policy §14.3."
-            ),
-            permit_type="fence_variance",
-            trigger_pattern={
-                "permit_type": "fence_variance",
-                "conditions": ["zone_check_required", "height_variance"],
-            },
-            action_sequence=[
-                {
-                    "step": 1,
-                    "action": "lookup_gis",
-                    "source": "GIS API",
-                    "field": "zone_classification",
-                    "description": "Look up parcel zone classification from GIS API",
-                },
-                {
-                    "step": 2,
-                    "action": "lookup_policy",
-                    "source": "PDF §14.3",
-                    "field": "max_permitted_height",
-                    "description": "Retrieve maximum permitted fence height from Municipal Code §14.3",
-                },
-                {
-                    "step": 3,
-                    "action": "submit_decision",
-                    "source": "Application System",
-                    "field": "decision_notes",
-                    "description": "Record zone, height limit, and submit application",
-                },
-            ],
-            knowledge_sources=[
-                {
-                    "type": "policy_text",
-                    "name": "Municipal Code §14.3",
-                    "reference": "PDF §14.3",
-                    "confidence": 0.91,
-                }
-            ],
-            embedding=vector,
-            trust_level=TrustLevel.SUPERVISED,
-            successful_runs=0,
-            contributions=[
-                {"user_id": "permit-tech-001", "role": "author", "share_pct": 100}
-            ],
-        )
-        db.add(spec)
-        db.commit()
-        logger.info("[Seed] Demo agent spec published: fence_variance Permit Processor")
+def _migrate_db():
+    """Add new columns to existing tables. SQLite doesn't support IF NOT EXISTS on ALTER TABLE."""
+    new_columns = [
+        ("sessions", "matched_spec_id", "TEXT"),
+        ("sessions", "candidate_spec_draft", "JSON"),
+    ]
+    with engine.connect() as conn:
+        for table, col, col_type in new_columns:
+            try:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                conn.commit()
+                logger.info(f"[DB] Migration: added {table}.{col}")
+            except Exception:
+                pass  # column already exists
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    _migrate_db()
     logger.info("[r4mi-ai] Database initialized")
 
     if os.getenv("DEMO_SESSION_SEED", "false").lower() == "true":
         logger.info("[r4mi-ai] DEMO_SESSION_SEED=true — seeding prior sessions...")
         await _seed_demo_sessions()
-        await _seed_demo_agent()
-        logger.info("[r4mi-ai] Demo sessions and agent ready")
+        logger.info("[r4mi-ai] Demo sessions ready")
 
     logger.info("[r4mi-ai] Backend started — listening on :8000")
     yield

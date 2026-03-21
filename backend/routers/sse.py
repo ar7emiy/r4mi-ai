@@ -6,7 +6,7 @@ from typing import AsyncIterator
 from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
 
-from routers._sse_bus import sse_bus
+from services.sse_bus import sse_bus
 
 router = APIRouter()
 

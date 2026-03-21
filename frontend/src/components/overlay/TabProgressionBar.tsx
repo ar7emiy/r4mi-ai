@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 export function TabProgressionBar() {
   const opportunitySessionId = useR4miStore((s) => s.opportunitySessionId)
+  const matchedAgent = useR4miStore((s) => s.matchedAgent)
   const panelView = useR4miStore((s) => s.panelView)
   const setPanelView = useR4miStore((s) => s.setPanelView)
   const publishedAgents = useR4miStore((s) => s.publishedAgents)
@@ -152,8 +153,25 @@ export function TabProgressionBar() {
           Architecture
         </button>
 
-        {/* Opportunity notification */}
-        {hasOpportunity && (
+        {/* Opportunity notification — adopt path */}
+        {hasOpportunity && matchedAgent && (
+          <button
+            data-testid="optimization-badge"
+            onClick={() => setPanelView('optimization')}
+            style={{
+              ...navBtnStyle,
+              background: '#16a34a',
+              border: '1px solid #15803d',
+              color: '#fff',
+              fontWeight: 700,
+              animation: 'pulse-glow 2s ease-in-out infinite',
+            }}
+          >
+            We found an agent for this
+          </button>
+        )}
+        {/* Opportunity notification — build path */}
+        {hasOpportunity && !matchedAgent && (
           <button
             data-testid="optimization-badge"
             onClick={() => setPanelView('optimization')}

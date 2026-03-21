@@ -52,6 +52,11 @@ interface R4miState {
   opportunitySessionId: string | null
   setOpportunitySessionId: (id: string | null) => void
 
+  // Adopt-path (AGENT_MATCH_FOUND)
+  matchedAgent: AgentSpec | null
+  matchScore: number | null
+  setMatchedAgent: (spec: AgentSpec | null, score: number | null) => void
+
   // Panel
   panelView: PanelView
   setPanelView: (v: PanelView) => void
@@ -98,6 +103,10 @@ interface R4miState {
 export const useR4miStore = create<R4miState>((set) => ({
   opportunitySessionId: null,
   setOpportunitySessionId: (id) => set({ opportunitySessionId: id }),
+
+  matchedAgent: null,
+  matchScore: null,
+  setMatchedAgent: (spec, score) => set({ matchedAgent: spec, matchScore: score }),
 
   panelView: 'closed',
   setPanelView: (v) => set({ panelView: v }),

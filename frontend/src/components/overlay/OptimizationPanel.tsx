@@ -15,6 +15,10 @@ export function OptimizationPanel() {
   const addPublishedAgent = useR4miStore((s) => s.addPublishedAgent)
   const setOpportunitySessionId = useR4miStore((s) => s.setOpportunitySessionId)
   const isRecording = useR4miStore((s) => s.isRecording)
+  const matchedAgent = useR4miStore((s) => s.matchedAgent)
+  const matchScore = useR4miStore((s) => s.matchScore)
+  const setMatchedAgent = useR4miStore((s) => s.setMatchedAgent)
+  const setCurrentSpec = useR4miStore((s) => s.setCurrentSpec)
   const [step, setStep] = useState<'replay' | 'correction' | 'spec' | 'validation' | 'done'>('replay')
 
   useEffect(() => {
@@ -106,7 +110,97 @@ export function OptimizationPanel() {
     </SidePanel>
   }
 
-  // optimization flow
+  // Adopt path — an existing agent matched this session's pattern
+  if (matchedAgent && panelView === 'optimization') {
+    const trustColor = matchedAgent.trust_level === 'autonomous' ? '#22c55e' : '#f59e0b'
+    const trustLabel = matchedAgent.trust_level === 'autonomous' ? 'AUTONOMOUS' : 'SUPERVISED'
+    const scoreDisplay = matchScore != null ? `${Math.round(matchScore * 100)}% match` : ''
+
+    function handleActivate() {
+      setCurrentSpec(matchedAgent!)
+      setStep('validation')
+    }
+
+    function handleFork() {
+      // Enter build path with matched agent pre-loaded as starting point
+      setCurrentSpec({ ...matchedAgent!, parent_spec_id: matchedAgent!.id })
+      setMatchedAgent(null, null)
+      setStep('correction')
+    }
+
+    return (
+      <SidePanel
+        title="We found an agent for this"
+        subtitle="An existing agent matches your workflow pattern."
+        onClose={() => { setMatchedAgent(null, null); setPanelView('closed') }}
+      >
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Agent card */}
+          <div style={{
+            background: '#1a1d27', border: '1px solid #2d3149', borderRadius: 8, padding: '14px 16px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+              <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 14 }}>{matchedAgent.name}</div>
+              <span style={{
+                background: `${trustColor}22`, color: trustColor, fontSize: 10, fontWeight: 800,
+                padding: '2px 8px', borderRadius: 20, border: `1px solid ${trustColor}`,
+              }}>{trustLabel}</span>
+            </div>
+            <div style={{ color: '#64748b', fontSize: 12, marginBottom: 10 }}>{matchedAgent.description}</div>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <div style={{ color: '#94a3b8', fontSize: 11 }}>
+                <span style={{ color: '#6366f1', fontWeight: 700 }}>{matchedAgent.successful_runs}</span> successful runs
+              </div>
+              {scoreDisplay && (
+                <div style={{ color: '#94a3b8', fontSize: 11 }}>
+                  <span style={{ color: '#22c55e', fontWeight: 700 }}>{scoreDisplay}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Trust explanation */}
+          {matchedAgent.trust_level === 'supervised' && (
+            <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5, padding: '8px 0' }}>
+              SUPERVISED: you will confirm each step as the agent executes.
+            </div>
+          )}
+          {matchedAgent.trust_level === 'autonomous' && (
+            <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5, padding: '8px 0' }}>
+              AUTONOMOUS: one confirmation covers the whole workflow.
+            </div>
+          )}
+
+          {/* Action sequence preview */}
+          <div>
+            <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action Sequence</div>
+            {matchedAgent.action_sequence.map((step) => (
+              <div key={step.step} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#2d3149', color: '#6366f1', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{step.step}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                  <span style={{ color: '#e2e8f0' }}>{step.description}</span>
+                  {' '}<span style={{ color: '#6366f1' }}>({step.source})</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* CTAs */}
+          <button onClick={handleActivate} style={{ ...actionBtn, width: '100%', marginTop: 4 }}>
+            Activate Agent
+          </button>
+          <button
+            onClick={handleFork}
+            style={{ ...actionBtn, width: '100%', background: 'transparent', border: '1px solid #2d3149', color: '#94a3b8', marginTop: 0 }}
+          >
+            Fork &amp; Customise
+          </button>
+        </div>
+      </SidePanel>
+    )
+  }
+
+  // optimization flow (build path)
   return (
     <SidePanel
       title="r4mi-ai detected a repetitive workflow"
