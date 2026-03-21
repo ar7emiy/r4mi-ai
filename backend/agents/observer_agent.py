@@ -8,6 +8,7 @@ from models.event import UIEvent, SSEEventType
 from models.session import SessionRecord, PatternState
 from services.vision_service import vision_service
 from services.pattern_detector import pattern_detector
+from services.step_labeller import step_labeller
 from services.log_streamer import logger
 
 
@@ -22,7 +23,7 @@ class ObserverAgent:
         self,
         event: UIEvent,
         db: Session,
-    ) -> Optional[str]:
+    ) -> tuple[Optional[str], Optional[object]]:
         """Process one UIEvent. Returns SSEEventType if broadcast needed."""
 
         session = db.get(SessionRecord, event.session_id)
@@ -39,6 +40,15 @@ class ObserverAgent:
             db.add(session)
             db.commit()
             logger.info(f"[Observer] Session {event.session_id} started")
+
+        # In teach-me mode: generate step description in realtime
+        if event.capture_mode == "teach" and not event.step_description:
+            try:
+                description = await step_labeller.label_event(event)
+                if description:
+                    event = event.model_copy(update={"step_description": description})
+            except Exception:
+                pass  # step label failure is non-fatal
 
         # Accumulate events
         events_list = list(session.events or [])
@@ -80,7 +90,7 @@ class ObserverAgent:
             if result:
                 sse_type = result
 
-        return sse_type
+        return sse_type, session
 
     def _infer_permit_type(self, event: UIEvent) -> str:
         screen = event.screen_name.lower()

@@ -23,6 +23,18 @@ class MarketMatcher:
         Compare candidate spec embedding against all published specs.
         Returns (matching_spec, score) or None.
         """
+        return await self.find_match_by_vector(candidate.embedding, db)
+
+    async def find_match_by_vector(
+        self,
+        query_vector: list[float],
+        db: Session,
+    ) -> Optional[tuple[NarrowAgentSpec, float]]:
+        """
+        Compare a raw embedding vector against all published spec embeddings.
+        Used at detection time to compare a session trace embedding vs published specs.
+        Returns (matching_spec, score) or None.
+        """
         published = db.exec(select(NarrowAgentSpec)).all()
         if not published:
             logger.info("[MarketMatcher] No published agents to compare against")
@@ -34,12 +46,8 @@ class MarketMatcher:
         for spec in published:
             if not spec.embedding:
                 continue
-            score = embedding_service.cosine_similarity(
-                candidate.embedding, spec.embedding
-            )
-            logger.info(
-                f"[MarketMatcher] vs '{spec.name}': cosine={score}"
-            )
+            score = embedding_service.cosine_similarity(query_vector, spec.embedding)
+            logger.info(f"[MarketMatcher] vs '{spec.name}': cosine={score}")
             if score > best_score:
                 best_score = score
                 best_match = spec

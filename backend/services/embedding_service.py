@@ -22,7 +22,7 @@ class EmbeddingService:
         t0 = time.time()
         try:
             result = await self.client.aio.models.embed_content(
-                model="models/gemini-embedding-001",
+                model="models/text-embedding-004",
                 contents=text,
             )
         except Exception as e:
@@ -37,7 +37,7 @@ class EmbeddingService:
 
         token_estimate = len(text.split())
         logger.info(
-            f"[Embedding] gemini-embedding-001 called | key={cache_key} | "
+            f"[Embedding] text-embedding-004 called | key={cache_key} | "
             f"~{token_estimate} tokens | {len(vector)} dims | {latency_ms}ms"
         )
         return vector

@@ -17,7 +17,7 @@ from agents.narrow_agent import narrow_agent
 from services.trust_engine import apply_trust_transition
 from services.log_streamer import logger
 from services.exceptions import QuotaExhaustedException
-from routers._sse_bus import sse_bus
+from services.sse_bus import sse_bus
 
 router = APIRouter()
 

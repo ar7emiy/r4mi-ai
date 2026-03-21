@@ -10,6 +10,7 @@ class SSEEventType(str, Enum):
     KNOWLEDGE_EXTRACTED      = "KNOWLEDGE_EXTRACTED"
     PATTERN_CANDIDATE        = "PATTERN_CANDIDATE"
     OPTIMIZATION_OPPORTUNITY = "OPTIMIZATION_OPPORTUNITY"
+    AGENT_MATCH_FOUND        = "AGENT_MATCH_FOUND"
     REPLAY_FRAME             = "REPLAY_FRAME"
     SPEC_GENERATED           = "SPEC_GENERATED"
     SPEC_UPDATED             = "SPEC_UPDATED"
@@ -23,13 +24,18 @@ class UIEvent(BaseModel):
     session_id: str
     user_id: str
     timestamp: datetime
-    event_type: Literal["click", "navigate", "input", "screen_switch", "submit"]
+    event_type: Literal["click", "navigate", "input", "screen_switch", "submit", "hover", "scroll", "copy"]
     screen_name: str
     element_selector: str
     element_value: Optional[str] = None
     permit_type: Optional[str] = None  # explicit permit type, bypasses inference
     backend_call: Optional[dict] = None
-    screenshot_b64: Optional[str] = None  # only on screen_switch events
+    screenshot_b64: Optional[str] = None  # on screen_switch (obs mode) or per-interaction (teach mode)
+    # Teach-me mode fields (populated when capture_mode="teach")
+    element_context: Optional[dict] = None  # {label, role, text, position, landmark}
+    capture_mode: Optional[Literal["obs", "teach"]] = "obs"
+    step_description: Optional[str] = None  # Gemini-generated natural language label
+    is_input_variable: Optional[bool] = None  # True = value varies per case
 
 
 class ActionTrace(BaseModel):

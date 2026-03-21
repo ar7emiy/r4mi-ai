@@ -18,6 +18,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     setCurrentSpec,
     updatePublishedAgent,
     setQuotaExhausted,
+    setMatchedAgent,
   } = useR4miStore()
 
   useEffect(() => {
@@ -29,10 +30,18 @@ export function SSEProvider({ children }: { children: ReactNode }) {
       setOpportunitySessionId(data.session_id)
     })
 
+    es.addEventListener('AGENT_MATCH_FOUND', (e) => {
+      const data = JSON.parse(e.data)
+      if (data.matched_spec) {
+        setMatchedAgent(data.matched_spec, data.matched_spec.match_score ?? null)
+      }
+      setOpportunitySessionId(data.session_id)
+    })
+
     es.addEventListener('SPEC_GENERATED', (e) => {
       const data = JSON.parse(e.data)
+      // Store the pre-generated spec; don't force-open the panel (user opens on their own time)
       setCurrentSpec(data.spec)
-      setPanelView('spec')
     })
 
     es.addEventListener('SPEC_UPDATED', (e) => {
