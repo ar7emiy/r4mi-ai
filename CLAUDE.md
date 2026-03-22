@@ -142,14 +142,25 @@ This is how the demo proves the AI is real without stopping the narrative.
 ## System Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│           FRONTEND (React 18 + Vite + TypeScript)            │
-│  Mock Legacy Permit UI  │  Tab Progression Bar (bottom)      │
-│  Optimization Panel     │  CLI Evidence Panel (split screen) │
-│  Agentverse View        │  /evidence + /system routes        │
-└──────────────┬──────────────────────────┬────────────────────┘
-               │ SSE /api/sse             │ REST
-               │ SSE /api/logs            │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    HOST WEB APPLICATION (any site)                      │
+│  [Existing UI — unmodified]              [r4mi-loader.js injected]      │
+│  User works normally in their familiar   Sidebar iframe (r4mi React app)│
+│  interface. Fields populated by agent    Chat thread · Record btn        │
+│  via postMessage relay. Tab-progression  Agents drawer · Notifications  │
+│  gates render inline on host form fields.                               │
+└───────────────────────────┬─────────────────────────┬───────────────────┘
+                capture.js  │ UIEvents (POST)          │ SSE /api/sse
+                r4mi-loader │ postMessage relay        │ REST /api/*
+┌───────────────────────────▼─────────────────────────▼───────────────────┐
+│                      BACKEND (FastAPI 0.133.1)                          │
+│  POST /api/observe                POST /api/agents/build                │
+│  GET  /api/session/{id}/replay    POST /api/agents/publish              │
+│  POST /api/agents/{id}/tune       POST /api/agents/{id}/correction      │
+│  GET  /api/evidence/{session_id}  GET  /api/sse                         │
+│  GET  /api/logs                   GET  /api/stubs/*                     │
+└───────────────────────────┬─────────────────────────────────────────────┘
+                            │
 ┌──────────────▼──────────────────────────▼────────────────────┐
 │                   BACKEND (FastAPI 0.133.1)                   │
 │  POST /api/observe                                           │
@@ -269,9 +280,12 @@ r4mi-ai/
 │   └── db.py
 │
 └── frontend/
+    ├── public/
+    │   ├── r4mi-loader.js          ← injected into host page; manages sidebar iframe + postMessage relay
+    │   └── capture.js              ← DOM observer; extracts element_context; POSTs UIEvents to /api/observe
     └── src/
         ├── components/
-        │   ├── legacy/
+        │   ├── legacy/             ← mock permit UI (demo harness only — not the real product UI)
         │   │   ├── ApplicationInbox.tsx
         │   │   ├── ApplicationForm.tsx
         │   │   ├── GISLookup.tsx
@@ -280,20 +294,22 @@ r4mi-ai/
         │   │   ├── OwnerRegistry.tsx
         │   │   └── UtilityCapacity.tsx
         │   └── overlay/
-        │       ├── TabProgressionBar.tsx
-        │       ├── OptimizationPanel.tsx
-        │       ├── SessionReplay.tsx
-        │       ├── SourceHighlight.tsx
-        │       ├── CorrectionInput.tsx
-        │       ├── SpecSummary.tsx
-        │       ├── AgentversePanel.tsx
-        │       └── CLIPanel.tsx
+        │       └── ApprovalGate.tsx    ← HITL per-field gate rendered inline on host form fields
+        ├── sidebar/                ← the r4mi UI — runs as iframe inside any host page
+        │   ├── SidebarApp.tsx      ← root; chat thread + record button + agents drawer
+        │   ├── hooks/
+        │   │   ├── useSidebarSSE.ts   ← maps SSE events to chat messages
+        │   │   └── useChatMessages.ts ← message state management
+        │   └── components/
+        │       ├── ChatMessage.tsx     ← renders notification/spec/agent-step/error messages + action buttons
+        │       ├── ChatInput.tsx       ← correction input + teach-me toggle
+        │       ├── RecordButton.tsx    ← enters teach-me mode; signals capture.js via postMessage
+        │       ├── ReplayPreview.tsx   ← step-by-step action sequence preview with source tags [TODO]
+        │       └── AgentverseDrawer.tsx← agent marketplace
         ├── hooks/
-        │   ├── useSSE.ts
-        │   ├── useLogs.ts
-        │   └── useAgentverse.ts
+        │   └── useSSE.tsx          ← legacy SSE hook (used by mock permit UI demo harness)
         ├── store/
-        │   └── r4mi.store.ts
+        │   └── r4mi.store.ts       ← matchedAgent, matchScore, session state
         └── assets/
             └── system-diagram.mermaid
 ```
@@ -308,12 +324,17 @@ class UIEvent(BaseModel):
     session_id: str
     user_id: str
     timestamp: datetime
-    event_type: Literal["click", "navigate", "input", "screen_switch", "submit"]
+    event_type: Literal["click", "navigate", "input", "screen_switch", "submit", "hover", "scroll", "copy"]
     screen_name: str
     element_selector: str
     element_value: Optional[str] = None
     backend_call: Optional[dict] = None
-    screenshot_b64: Optional[str] = None   # included on screen_switch events only
+    screenshot_b64: Optional[str] = None   # screen_switch only in obs mode; every interaction in teach mode
+    element_context: Optional[dict] = None  # teach mode: { label, role, text, position, landmark }
+    step_description: Optional[str] = None  # teach mode: voice transcription or Gemini-generated label
+    is_input_variable: Optional[bool] = None  # teach mode: True = value varies per case
+    capture_mode: Literal["obs", "teach"] = "obs"
+    permit_type: Optional[str] = None
 ```
 
 ### ActionTrace
@@ -500,4 +521,8 @@ VISION_CACHE_TTL=300
 - Screenshots are cached per session_id + screen_name — invalidate on new session
 - DEMO_SESSION_SEED=true means 2 prior sessions exist at startup so the third live walkthrough immediately triggers READY
 - The UML activity diagram lives at `frontend/src/assets/system-diagram.mermaid` and is rendered at `/system` via mermaid npm package
-- The system must ALWAYS seek to align with the ethos of README.md - never hard coding optimizations or detections because the optimization detection must be authentic, automation tuning with HITL must be authentic, we must seek to create a platform that will be able to be UI agnostic even if right now we are testing it within a mock UI. 
+- The system must ALWAYS seek to align with the ethos of README.md - never hard coding optimizations or detections because the optimization detection must be authentic, automation tuning with HITL must be authentic, we must seek to create a platform that will be able to be UI agnostic even if right now we are testing it within a mock UI.
+- **r4mi UI lives in the sidebar — not in overlays injected into the host page.** The sidebar is an iframe. The host page is only touched by `r4mi-loader.js` for: field population (postMessage relay) and tab-progression gate overlays per field. Do not create overlay React components that embed into the host app.
+- **Agent population writes to real host form fields** — never to a simulated UI. The replay preview in the sidebar is descriptive (step summaries + source tags), not a mock form.
+- **TrustLevel drives badge display only** — it must not gate or skip HITL confirmation steps. Every agent run goes through tab-progression verification regardless of trust level.
+- **capture.js and r4mi-loader.js are vanilla JS** — no React, no bundler dependencies. They must be includable via a plain `<script>` tag in any web application. 

@@ -12,7 +12,8 @@
 2. [Architecture Plan](#2-architecture-plan)
 3. [Implementation Plan](#3-implementation-plan)
 4. [Example Workflows](#4-example-workflows)
-5. [Open Questions](#5-open-questions)
+5. [Decisions](#5-decisions)
+6. [Enterprise Integration Model](#6-enterprise-integration-model)
 
 ---
 
@@ -20,9 +21,22 @@
 
 r4mi-ai is a UI workflow observation and automation factory. It watches a permit technician work inside any web-based system, silently detects repetitive patterns using real Gemini AI, then collaboratively builds narrow agents that progressively take over that work.
 
-> **Core principle:** the system notices patterns before the user does, and arrives at the "teach me" moment with a prepared solution — not an empty recording form.
+> **Core principle:** the system notices patterns before the user does, and arrives at the "teach me" moment with a prepared solution — not an empty recording form. Workers never stop working. r4mi finds them; they do not go looking for it.
 
-### 1.1 Comparison with Claude in Chrome Teach-Me
+### 1.1 Primary User Experience
+
+The user opens their normal, familiar web interface — which may be old, unattractive, and uncooperative. They do their job. r4mi observes silently from a sidebar panel injected by a single script tag. When the system detects a repeating pattern, a notification appears in the sidebar. The user is never blocked or interrupted — the notification is one click away, not in their face.
+
+When the user is ready, they click the notification. The sidebar delivers a short presentation:
+1. A chat message summarising what the system detected and why it thinks it can help.
+2. A visual replay of the action sequence — showing what the agent would do, step by step, with source annotations ("from GIS API", "from PDF §14.3").
+3. A closing message explaining the decision logic.
+
+The system then populates the real fields in the host web UI automatically. The user tabs through each filled field to verify or correct inline. This tab-progression verification happens inside the actual host form — not a simulation. When the user confirms, the agent is either created, updated, or verified as correct. The user continues their day.
+
+Next time they land on the same workflow page, the same sidebar notification appears. One click — fields auto-fill — tab to verify — done. The interaction surface stays minimal.
+
+### 1.2 Comparison with Claude in Chrome Teach-Me
 
 Claude in Chrome's teach-me feature is a manual macro recorder: the user presses record, demonstrates steps, stops, and saves a shortcut. It uses **rrweb** for full DOM capture and **claude-haiku-4-5** to label each step in natural language. The result is a parameterised prompt template with named input variables.
 
@@ -34,267 +48,375 @@ Claude in Chrome's teach-me feature is a manual macro recorder: the user presses
 | No marketplace / no prior art search | MarketMatcher checks for existing agents before building |
 | rrweb full DOM capture always-on | Lightweight observation mode + rich teach-me mode |
 | Speech narration as primary intent signal | Gemini Vision knowledge-source extraction per screen |
-| Haiku step labels per interaction | Step descriptions needed — **currently missing** |
-| `element_context` from real DOM | `element_context` not yet captured — **gap to close** |
+| Haiku step labels per interaction | Step descriptions generated per UIEvent in teach-me mode |
+| `element_context` from real DOM | `element_context` captured via `capture.js` DOM extraction |
 
-### 1.2 Site-Agnostic Goal
+### 1.3 Passive Observation is Primary
 
-The current demo runs inside r4mi's own mock permit UI, where `screen_name` is an application-defined constant (`GIS_LOOKUP`, `POLICY_REFERENCE` etc.). The target is a capture layer that derives context from the real DOM — URL, page title, ARIA landmarks, element roles and labels — so it can be dropped into any government portal, insurance intake, or back-office web system without cooperation from the host application.
+Passive observation is the default, always-on mode. The system watches every session without any worker action and surfaces opportunities autonomously. This is the primary detection path — it requires zero behavioural change from the worker.
 
-> **Immediate action:** design the UIEvent model now to accommodate DOM-native fields, even while the demo harness populates them synthetically. This means no schema migration when the real capture layer is built.
+Teach-me mode is a secondary accelerant. It exists for two cases:
+1. **Step-level correction** — worker clicks "Show me" to demonstrate the correct behaviour for a specific step in an already-detected pattern.
+2. **Standalone proactive capture** — worker knows they will repeat a workflow and wants to build an agent before the system has seen three sessions.
+
+Both paths feed the same funnel (`NarrowAgentSpec` → `MarketMatcher` → Agentverse). The distinction is only in data richness: observation mode uses lightweight events; teach-me mode uses `element_context`, per-interaction screenshots, and `step_description` labels.
+
+> **This principle is permanent.** Future implementations must not require workers to initiate recording as a prerequisite for automation. The system finds them; they do not go looking.
+
+### 1.4 Trust Level is Emergent, Not Assigned
+
+All agents run through the same always-on HITL tab-approval-progression. Trust level is a statistical badge reflecting how large a batch the agent has earned the right to fill without triggering a correction gate.
+
+**The model:**
+- New agent: batch size = 1 field per gate
+- As correction rate drops below `TRUST_PROMOTION_MAX_FAILURE_RATE` → batch size increases
+- If a batch causes divergence → batch size shrinks; divergence point becomes the precise gate boundary
+- "AUTONOMOUS" = batch size covers the whole workflow with a single end gate — earned, never assigned
+
+**The HITL tab-approval-progression flow (always-on, every agent, every run):**
+1. Agent populates field(s) in the current batch directly in the host UI → pauses at a gate
+2. User tabs through filled fields, approves or edits each inline in the real form
+3. If a correction is made → optional popup "What was wrong? (optional)" — skippable
+4. Correction + optional reason logged to `AgentCorrection` table
+5. After 3+ corrections to the same field across runs → spec improvement suggestion surfaces in sidebar
+6. Agent proceeds to next batch
+
+> `TrustLevel` enum stays for display. It must not drive behavioral branching.
 
 ---
 
 ## 2. Architecture Plan
 
-### 2.1 Two-Mode Capture
+### 2.1 Sidebar as Primary UI Surface
 
-The most important structural change is separating capture into two distinct modes with different data richness. A single heavy capture mode would be too expensive for passive observation; a single light mode would not give the teach-me phase enough context to generate high-quality specs.
+r4mi's UI is a collapsible sidebar panel injected into the host page by `r4mi-loader.js`. The sidebar runs as a cross-origin iframe embedding the sidebar React app (built separately from any host app). It communicates with the host page via `postMessage`.
+
+**The sidebar contains:**
+- Chat message thread — all system notifications, presentation steps, agent run summaries
+- Record button — enters teach-me mode
+- Agents drawer — Agentverse marketplace accessible from header
+
+**The host page is untouched except:**
+- `capture.js` observing DOM events and POSTing UIEvents
+- Agent population writing values into real form fields (via `postMessage` to `capture.js`)
+- Tab-progression gates rendering inline within the actual form (lightweight DOM overlay per field)
+
+The sidebar never reproduces the host UI. All agent interaction — population, verification, correction — happens inside the real form. The sidebar is the observer and communicator; the host page is the execution surface.
+
+### 2.2 Sidebar–Host Communication Protocol
+
+```
+Sidebar iframe  ←──postMessage──→  r4mi-loader.js  ←──direct DOM──→  Host page
+```
+
+| Message type | Direction | Purpose |
+|---|---|---|
+| `r4mi:opened` | loader → sidebar | Sidebar became visible |
+| `r4mi:close` | sidebar → loader | User clicked close |
+| `r4mi:set-session` | sidebar → loader | Begin/end capture session with sessionId |
+| `r4mi:populate` | sidebar → loader | Fill field `{ selector, value }` in host form |
+| `r4mi:gate` | sidebar → loader | Render approval gate overlay on a field |
+| `r4mi:gate-response` | loader → sidebar | User approved or corrected a gate |
+| `r4mi:event` | loader → sidebar | UIEvent captured from host DOM |
+
+### 2.3 Two-Mode Capture
+
+The most important structural separation: two distinct capture modes with different data richness.
 
 | Observation Mode (passive, always-on) | Teach-Me Mode (active, on invitation) |
 |---|---|
 | Lightweight — minimal overhead on worker | Rich — full context per interaction |
 | UIEvent: 5 event types, `screen_name`, selector, value | UIEvent: + `element_context`, step screenshot, `step_description` |
 | Screenshot only on `screen_switch` | Screenshot on every meaningful interaction |
-| No per-step LLM calls | Haiku call per step — generates natural language label |
+| No per-step LLM calls | Gemini Flash call per step — generates natural language label |
 | Purpose: detect repetition via embedding similarity | Purpose: build a high-quality NarrowAgentSpec |
 | Input to PatternDetector + MarketMatcher | Input to SpecBuilderAgent |
 | Captures: *is this the same workflow again?* | Captures: *what exactly was the worker deciding and why?* |
 
-### 2.2 Enhanced UIEvent Model
+Teach-me mode is activated by the Record button in the sidebar header. While recording, the user optionally narrates each step by voice (Web Speech API in `capture.js`) — narration is transcribed and stored as `step_description`, achieving parity with Claude in Chrome's voice narration model.
 
-The UIEvent model gains an optional `element_context` block and a `capture_mode` flag. Observation mode leaves new fields null; teach-me mode populates them from the real DOM. The demo harness synthesises plausible values so the schema is validated end-to-end before the real capture layer exists.
+### 2.4 Enhanced UIEvent Model
+
+The UIEvent model carries an optional `element_context` block and a `capture_mode` flag. Observation mode leaves new fields null; teach-me mode populates them from the real DOM.
 
 | Field | Obs. Mode | Teach-Me Mode | Notes |
 |---|---|---|---|
 | `session_id` | required | required | No change |
 | `user_id` | required | required | No change |
-| `event_type` | required | required | Extend enum: + `hover`, `scroll`, `copy` |
+| `event_type` | required | required | Enum: `click`, `navigate`, `input`, `screen_switch`, `submit`, `hover`, `scroll`, `copy` |
 | `screen_name` | required | derived | Teach-me derives from URL + ARIA landmark |
 | `element_selector` | required | required | CSS selector string |
 | `element_value` | optional | required | Input value, selected option, etc. |
 | `element_context` | null | **required** | `{ label, role, text, position, landmark }` |
 | `screenshot_b64` | screen_switch only | **required** | Per meaningful interaction |
-| `step_description` | null | **required** | Haiku-generated natural language label |
+| `step_description` | null | **required** | Voice transcription or Gemini-generated label |
 | `is_input_variable` | null | **required** | `true` = value varies per case; `false` = constant |
 | `capture_mode` | `obs` | `teach` | Enum: `obs \| teach` |
 | `permit_type` | required | required | Still required in both modes |
 | `backend_call` | optional | optional | No change |
 
-### 2.3 Market-First Detection Flow
+### 2.5 Market-First Detection Flow
 
-Currently, when a pattern is detected (`OPTIMIZATION_OPPORTUNITY`), the system always goes to the build path — starting SpecBuilderAgent from scratch. The new flow checks MarketMatcher first, producing two distinct invitation paths.
+When a pattern is detected, MarketMatcher runs immediately before any build path is taken.
 
-| # | Actor | Action / System Response |
+| # | Actor | Action |
 |---|---|---|
-| 1 | PatternDetector | Session completes. Embeds trace with `text-embedding-004`. Compares cosine similarity against prior sessions of same `permit_type`. |
-| 2 | PatternDetector | Similarity ≥ 0.85 for N-1 prior sessions → `state = READY`. |
-| 3 | **MarketMatcher** | **Immediately checks published NarrowAgentSpecs for a match ≥ 0.85 using the current session's trace embedding. [NEW STEP]** |
-| 4a | SSE Bus | **Match found → fire `AGENT_MATCH_FOUND` with `{ matched_spec_id, score, name, trust_level }`. [NEW SSE TYPE]** |
-| 4b | SSE Bus | No match → fire `OPTIMIZATION_OPPORTUNITY` as today. Simultaneously kick off SpecBuilderAgent as background task. [ENHANCED] |
-| 5a | Frontend | **Adopt path:** badge shows "We found an agent for this" with match score. One-click activation. Fork option for power users. |
-| 5b | Frontend | **Build path:** badge shows "We detected a pattern." When user opens panel, draft spec is already displayed (pre-generated in background). |
+| 1 | PatternDetector | Session completes. Embeds trace with `text-embedding-004`. Cosine similarity ≥ 0.85 for N-1 prior sessions → `state = READY`. |
+| 2 | **MarketMatcher** | **Immediately checks published NarrowAgentSpecs for a match ≥ 0.85 using the current session's trace embedding.** |
+| 3a | SSE Bus | **Match found → fire `AGENT_MATCH_FOUND` with `{ matched_spec_id, score, name, trust_level }`.** |
+| 3b | SSE Bus | No match → fire `OPTIMIZATION_OPPORTUNITY`. Simultaneously kick off SpecBuilderAgent as background task. |
+| 4a | Sidebar | **Adopt path:** notification card showing agent name, trust badge, match score. |
+| 4b | Sidebar | **Build path:** notification card showing "repeating pattern detected." Draft spec pre-generated in background. |
 
-### 2.4 Pre-Generation at Detection Time
+### 2.6 Pre-Generation at Detection Time
 
-The "already prepared" feeling requires the spec to be done before the user gets to the panel. Fix: kick off SpecBuilderAgent as an `asyncio` background task the moment READY triggers. Store the draft on `SessionRecord.candidate_spec_draft`. When the user opens OptimizationPanel, display the draft immediately. The correction flow then refines rather than waits for initial generation.
+The spec must be ready before the user opens the sidebar panel. When `OPTIMIZATION_OPPORTUNITY` fires, SpecBuilderAgent runs as an `asyncio` background task and stores the draft in `SessionRecord.candidate_spec_draft`. When the sidebar's build flow begins, the draft is immediately available — no loading spinner.
 
 ```python
-# pattern_detector.py — when READY
-if state == READY:
-    asyncio.create_task(_pre_generate_spec(session, all_matching_sessions, db))
-    return SSEEventType.OPTIMIZATION_OPPORTUNITY
-
-async def _pre_generate_spec(session, matching_sessions, db):
-    spec = await spec_builder_agent.build(session, matching_sessions)
-    session.candidate_spec_draft = spec.model_dump()
-    db.commit()
-    await sse_bus.broadcast(SSEEventType.SPEC_GENERATED, spec)
+# pattern_detector.py — when READY, no market match
+asyncio.create_task(_pre_generate_spec(session, all_matching_sessions, db))
 ```
 
-> **Optional enhancement:** run a speculative draft at CANDIDATE state (2nd session). Refine at READY (3rd session). By the time the badge appears, the spec has been through two generations.
+### 2.7 Sidebar Optimization Presentation Flow
 
-### 2.5 Step Description Generation (Haiku Labelling)
+When the user clicks the notification in the sidebar, the flow proceeds as a chat-style presentation:
 
-Claude in Chrome uses `claude-haiku-4-5` to generate a one-line natural language description of each captured step in real time. r4mi currently has no equivalent.
+**Adopt path (existing agent found):**
+1. Sidebar shows adopt card: agent name, trust badge, run count, match score
+2. User clicks "Activate Agent"
+3. Sidebar narrates: "Running [agent name] on this case..."
+4. Agent populates real host form fields one batch at a time
+5. Sidebar shows gate prompt; user tabs through fields in the real form to verify
+6. Sidebar confirms run complete
 
-After each UIEvent in teach-me mode, call Gemini Flash with a micro-prompt:
+**Build path (no existing agent):**
+1. Sidebar shows notification: "I've seen this workflow N times."
+2. User clicks "Review"
+3. Sidebar shows pre-generated spec summary: action sequence steps, knowledge sources
+4. Sidebar animates a replay preview inline (step-by-step descriptions with source tags)
+5. User can type a correction in sidebar chat input or click "Show me" for teach-me correction
+6. After confirmation, user clicks "Publish"
+7. Agent published to Agentverse; sidebar confirms with agent card
+
+### 2.8 Step Description Generation
+
+After each UIEvent in teach-me mode, Gemini generates a one-line natural language description:
 
 ```
-# Step context
 screen: {screen_name}  element: {label} ({role})
 action: {event_type}  value: {element_value}
 
-# Task
-Write one plain-English sentence describing what the worker
-just did and why. Max 15 words. No jargon.
+Write one plain-English sentence describing what the worker just did and why. Max 15 words. No jargon.
 ```
 
-The generated label is stored in `UIEvent.step_description` and passed to SpecBuilderAgent. The prompt then works from a sequence of labelled, human-readable steps rather than raw event data.
+The generated label is stored in `UIEvent.step_description` and passed to SpecBuilderAgent. A `STEP_LABEL_MODE=realtime|batch` config flag controls whether labels are generated inline or deferred to session end.
 
-### 2.6 SpecBuilderAgent Prompt Enhancement
+### 2.9 SpecBuilderAgent Prompt Enhancement
 
-After teach-me mode changes, SpecBuilderAgent should receive labelled steps with causal knowledge source threading: for each step, the prompt includes which knowledge source the worker was consulting (from VisionService) and how it informed the field value.
+SpecBuilderAgent receives labelled steps with causal knowledge source threading: for each step, the prompt includes which knowledge source the worker was consulting and how it informed the field value.
 
-> **Example:** "At step 5 (entered zone code R-2), the worker had just read PDF §14.3 which states that R-2 zones permit fences up to 6ft. The system should verify `[zone_code]` against this policy before filling `[field-max-height]`."
->
-> This causal link is r4mi's structural advantage over Claude in Chrome, which captures *what* was clicked but not *why*.
+> **Example:** "At step 5 (entered zone code R-2), the worker had just read PDF §14.3 which states that R-2 zones permit fences up to 6ft."
+
+This causal link is r4mi's structural advantage over macro recorders: it captures *why* the value was chosen, not just *what* was clicked.
 
 ---
 
 ## 3. Implementation Plan
 
-Each initiative is independently testable. The existing 7-beat E2E suite must remain green after every item.
+Each initiative is independently testable. The existing E2E suite must remain green after every item.
 
-| Initiative | Priority | Effort | Files Changed |
+| Initiative | Priority | Effort | Key Files |
 |---|---|---|---|
-| Move MarketMatcher to detection time | **P0** | S (0.5d) | `pattern_detector.py`, `sse.py`, `r4mi.store.ts`, `OptimizationPanel.tsx` |
-| Add `AGENT_MATCH_FOUND` SSE + adopt-path UI | **P0** | M (1d) | `models/event.py`, `sse.py`, `OptimizationPanel.tsx`, `AgentversePanel.tsx` |
-| Pre-generate spec as background task on READY | **P0** | S (0.5d) | `pattern_detector.py`, `spec_builder_agent.py`, `models/session.py` |
-| Add `element_context` to UIEvent model | P1 | S (0.5d) | `models/event.py`, demo harness, seed sessions |
-| Add `capture_mode` + `is_input_variable` to UIEvent | P1 | S (0.5d) | `models/event.py`, `observer_agent.py` |
-| Step description generation (Haiku call per event) | P1 | M (1d) | `services/step_labeller.py` (new), `observer_agent.py`, `log_streamer.py` |
-| Thread knowledge sources into SpecBuilderAgent prompt | P1 | M (1d) | `spec_builder_agent.py` |
-| Teach-me mode: screenshot per interaction | P2 | M (1d) | `models/event.py`, `vision_service.py`, demo harness |
-| Derive `screen_name` from URL + ARIA landmarks | P2 | L (2d) | `observer_agent.py`, demo harness, future JS capture layer |
-| JS capture snippet (site-agnostic observe layer) | P3 | XL (1w) | New: `capture.js`, injected via bookmarklet or extension |
+| Sidebar SSE → chat presentation (adopt + build paths) | **P0** | M (1d) | `sidebar/SidebarApp.tsx`, `sidebar/hooks/useSidebarSSE.ts` |
+| Adopt-path card with Activate + Fork CTAs | **P0** | S (0.5d) | `sidebar/components/ChatMessage.tsx` |
+| Sidebar replay preview (step-by-step with source tags) | **P0** | M (1d) | `sidebar/components/ReplayPreview.tsx` (new) |
+| Host UI field population via postMessage | **P0** | M (1d) | `frontend/public/r4mi-loader.js`, `capture.js` |
+| Tab-progression gate overlay on host form fields | **P0** | M (1d) | `frontend/public/r4mi-loader.js` |
+| Voice narration in teach-me mode (Web Speech API) | P1 | M (1d) | `frontend/public/capture.js` |
+| Step description generation (Gemini per teach event) | P1 | S | `services/step_labeller.py` ✅ already built |
+| Thread knowledge sources into SpecBuilderAgent prompt | P1 | S | `agents/spec_builder_agent.py` ✅ already built |
+| AGENT_MATCH_FOUND SSE → sidebar adopt notification | P1 | S | `sidebar/hooks/useSidebarSSE.ts` ✅ partial |
+| Sidebar correction input → spec regeneration | P1 | S | `sidebar/SidebarApp.tsx` — extend handleAction |
+| NPM package wrapper (`@r4mi/capture`) | P2 | M (1d) | New: `capture-pkg/` |
+| Derive `screen_name` from URL + ARIA landmarks | P2 | S | `frontend/public/capture.js` ✅ already built |
+| JS capture: `element_context` from real DOM | P2 | S | `frontend/public/capture.js` ✅ already built |
 
-### 3.1 P0 — Quick Wins (This Sprint)
+### Already Built (Backend — No Changes Required)
 
-Three items that are pure backend wiring with minimal frontend change. They deliver the market-first detection and the "already prepared" feeling.
+All backend P0/P1 items from the previous sprint are complete and correct:
 
-**P0-A: Move MarketMatcher to detection time**
-- In `pattern_detector.py`, after `state = READY`: call `market_matcher.find_match()` using the current session's trace embedding compared against all published spec embeddings
-- If match ≥ threshold: return `SSEEventType.AGENT_MATCH_FOUND` with payload `{ matched_spec_id, score }`
-- If no match: return `SSEEventType.OPTIMIZATION_OPPORTUNITY` as today
-- Add `AGENT_MATCH_FOUND` to `SSEEventType` enum in `models/event.py`
-- In `r4mi.store.ts`: handle `AGENT_MATCH_FOUND` — set `matchedAgent` state, show badge in adopt-path style
+- ✅ `UIEvent` model: `element_context`, `capture_mode`, `is_input_variable`, `step_description`, extended event types
+- ✅ `SSEEventType.AGENT_MATCH_FOUND` in `models/event.py`
+- ✅ MarketMatcher called at READY in `pattern_detector.py`
+- ✅ Pre-generation background task in `pattern_detector.py`
+- ✅ `SessionRecord.candidate_spec_draft` in `models/session.py`
+- ✅ Causal knowledge source threading in `spec_builder_agent.py`
+- ✅ `step_labeller.py` with `STEP_LABEL_MODE` config
+- ✅ `capture.js` — real DOM extraction, site-agnostic, served from `frontend/public/`
+- ✅ `r4mi.store.ts` — `matchedAgent`, `matchScore`, `AGENT_MATCH_FOUND` handler
 
-**P0-B: Pre-generate spec as background task**
-- Add `candidate_spec_draft: Optional[dict]` to `SessionRecord` model
-- In `pattern_detector.py`, when `OPTIMIZATION_OPPORTUNITY` fires: `asyncio.create_task(_pre_generate_spec(session, db))`
-- `_pre_generate_spec()` calls SpecBuilderAgent, stores result in `session.candidate_spec_draft`, fires `SPEC_GENERATED` SSE
-- `OptimizationPanel`: check store for existing spec draft before showing loading state
+### Current Frontend Gap
 
-**P0-C: Adopt-path UI in OptimizationPanel**
-- When `store.matchedAgent` is set: render adopt card showing agent name, trust badge, run count, and match percentage
-- Primary CTA: "Activate Agent" — skips spec building, goes directly to ValidationReplay with matched agent's `action_sequence`
-- Secondary CTA: "Fork & Customise" — enters build path with matched spec pre-loaded into SpecBuilderAgent as starting point
+The sidebar exists and handles basic SSE events, but the following are not yet built:
+- Replay preview component (step-by-step with source tags, inside sidebar)
+- Host UI field population (sidebar → postMessage → loader → DOM write)
+- Tab-progression gate overlay (inline per field in real host form)
+- Voice narration wiring in `capture.js`
+- Full adopt-path card with Activate Agent / Fork & Customise CTAs
 
 ---
 
 ## 4. Example Workflows
 
-Three full interaction walkthroughs showing the target experience from both user and system perspective.
-
 ### 4.1 Scenario A — Adopt Path (Existing Agent Found)
 
 **Context:** Maria is a permit technician. She has just completed her third fence variance application in two weeks. An agent for this workflow was published by her colleague two months ago.
 
-| # | Actor | Action / System Response |
+| # | Actor | Action |
 |---|---|---|
-| 1 | Maria | Opens PRM-2024-0043 from inbox. Navigates: Inbox → GIS Lookup → Policy Reference → Application Form. Fills zone code, max height, notes. Clicks Submit. |
-| 2 | Backend | Session completes. PatternDetector embeds the action trace (real `text-embedding-004` call). Cosine similarity: 0.93 vs session_001, 0.91 vs session_002. State = READY. |
-| 3 | **Backend** | **MarketMatcher runs immediately. Finds "Fence Variance — R-2 Zone Check" at cosine 0.94. Fires `AGENT_MATCH_FOUND` SSE.** |
-| 4 | Frontend | Tab Progression Bar badge appears. Label: "We found an agent for this." Different styling from build-path badge. Maria finishes her current thought before clicking. |
-| 5 | Maria | Clicks badge. OptimizationPanel opens. Adopt card: agent name, SUPERVISED trust badge, "47 successful runs", "94% match". Primary button: "Activate Agent". |
-| 6 | Maria | Reads the agent card. Clicks "Activate Agent". No spec building. ValidationReplay starts immediately. |
-| 7 | Frontend | ValidationReplay animates action_sequence against PRM-2024-0043 fields: auto-fills zone=R-2, max-height=6ft, notes prefilled. Source tags shown ("from GIS API", "from PDF §14.3"). |
-| 8 | Maria | Confirms. Agent is now active for her session. Next fence variance: agent auto-fills immediately, no interaction required. |
-| 9 | Maria *(optional)* | Notices max-height rule has changed to 8ft in her jurisdiction. Clicks "Fork & Edit" from agent card. Enters teach-me mode on the specific step. |
-| 10 | Backend | Fork creates new NarrowAgentSpec with `parent_spec_id` set. Attribution split between original author and Maria. New agent published to Agentverse. |
+| 1 | Maria | Opens PRM-2024-0043. Works normally: Inbox → GIS Lookup → Policy Reference → Application Form. Fills zone code, max height, notes. Clicks Submit. |
+| 2 | Backend | PatternDetector embeds trace. Cosine: 0.93 vs session_001, 0.91 vs session_002. State = READY. MarketMatcher finds "Fence Variance — R-2 Zone Check" at 0.94. Fires `AGENT_MATCH_FOUND`. |
+| 3 | Sidebar | Notification appears in sidebar chat: "Found matching agent: Fence Variance — R-2 Zone Check (94% match)". Maria finishes her current thought. |
+| 4 | Maria | Glances at sidebar. Clicks notification. |
+| 5 | Sidebar | Adopt card appears: agent name, SUPERVISED badge, "47 successful runs", "94% match". Two buttons: "Activate Agent" and "Fork & Customise". |
+| 6 | Maria | Clicks "Activate Agent". |
+| 7 | Sidebar / Host UI | Sidebar narrates: "Running Fence Variance agent on PRM-2024-0043..." Agent populates real form fields: zone=R-2, max-height=6ft, notes prefilled. Source tags annotate each field. |
+| 8 | Sidebar | Gate appears: "Review filled fields — tab through to confirm." |
+| 9 | Maria | Tabs through fields in the actual host form. All correct. Presses Enter to confirm. |
+| 10 | Sidebar | Run confirmed. "Agent run complete — 3 fields processed." Maria continues her day. |
+| 11 | Next visit | Maria lands on a fence variance permit. Same notification. One click. Fields auto-fill. Tab-verify. Done. |
 
-> **Total friction for Maria:** one badge click + one "Activate" click. She never leaves her workflow for more than 30 seconds. The agent finds her; she does not go looking for it.
+> **Total friction:** one notification click + tab-through verification. Maria never leaves the host UI for more than a few seconds.
 
 ---
 
 ### 4.2 Scenario B — Build Path (No Existing Agent)
 
-**Context:** James handles commercial signage permits. This workflow has never been automated. He has just completed his third signage permit this month.
+**Context:** James handles commercial signage permits. No agent exists yet. He has just completed his third signage permit this month.
 
-| # | Actor | Action / System Response |
+| # | Actor | Action |
 |---|---|---|
-| 1 | James | Completes third commercial signage permit: Inbox → GIS Lookup (commercial zone check) → Code Enforcement (sign dimensions) → Fee Schedule → Application Form. Submits. |
-| 2 | Backend | Session completes. PatternDetector embeds trace. Cosine similarity: 0.89 vs session_011, 0.91 vs session_012. State = READY. |
-| 3 | **Backend** | **MarketMatcher runs. No published spec scores ≥ 0.85 for commercial signage. Fires `OPTIMIZATION_OPPORTUNITY`. Simultaneously kicks off SpecBuilderAgent as background task.** |
-| 4 | Backend | SpecBuilderAgent (`gemini-2.5-flash`) builds draft NarrowAgentSpec from the three session traces + confirmed knowledge sources. Stores in `session.candidate_spec_draft`. Fires `SPEC_GENERATED` SSE. |
-| 5 | Frontend | Badge appears: "We detected a repeating pattern." James finishes his current task. |
-| 6 | James | Clicks badge. OptimizationPanel opens. **Draft spec is already displayed — no loading spinner.** Shows ACTION SEQUENCE (4 steps) and KNOWLEDGE SOURCES: "Commercial Zone Map", "Sign Bylaw §8.2". |
-| 7 | James | Reads the spec. Sees knowledge source is "Commercial Zone Map (wiki)" but the real source is the GIS PDF export. Types correction: "Use the GIS PDF, not the zone map wiki." |
-| 8 | Backend | Correction appended to SpecBuilderAgent prompt. Real `gemini-2.5-flash` call regenerates spec. `knowledge_sources` updated: "GIS PDF (parcel export)". `SPEC_UPDATED` SSE fires. |
-| 9 | James | Sees updated spec. Clicks "Review & Validate". ValidationReplay animates against a sample application. Fields auto-fill correctly. |
-| 10 | James | Clicks "Publish to Agentverse". Spec embedded (real `text-embedding-004` call). Agent ID assigned. Trust: SUPERVISED. `AGENT_PUBLISHED` SSE fires. |
-| 11 | Frontend | Agentverse panel shows new agent card: "Commercial Signage — Zone + Sign Check" with SUPERVISED badge and 0 runs. |
-| 12 | Future | Next technician opens a commercial signage permit. MarketMatcher finds this agent at step 3. They follow Scenario A. James's contribution is recorded. |
+| 1 | James | Completes third commercial signage permit. Submits. |
+| 2 | Backend | PatternDetector: similarity 0.89 + 0.91. READY. MarketMatcher: no match. Fires `OPTIMIZATION_OPPORTUNITY`. Background task kicks off SpecBuilderAgent immediately. |
+| 3 | Backend | SpecBuilderAgent generates draft NarrowAgentSpec. Stores in `session.candidate_spec_draft`. Fires `SPEC_GENERATED` SSE. |
+| 4 | Sidebar | Notification: "I've seen this workflow 3 times. I think I can help." |
+| 5 | James | Clicks notification when ready. |
+| 6 | Sidebar | Chat message: "Here's what I'd automate..." Draft spec displayed: 4 action steps, knowledge sources "Commercial Zone Map", "Sign Bylaw §8.2". |
+| 7 | Sidebar | Replay preview animates: each step described in plain English with source tag. No loading spinner — spec was already built. |
+| 8 | James | Sees knowledge source is wrong. Types in sidebar: "Use the GIS PDF, not the zone map wiki." |
+| 9 | Backend | Correction appended to SpecBuilderAgent prompt. `gemini-2.5-flash` regenerates spec. `SPEC_UPDATED` SSE fires. |
+| 10 | Sidebar | Updated spec shown inline. James clicks "Publish". |
+| 11 | Backend | Spec embedded (`text-embedding-004`). Agent ID assigned. Trust: SUPERVISED. `AGENT_PUBLISHED` SSE fires. |
+| 12 | Sidebar | "Agent published: Commercial Signage — Zone + Sign Check (SUPERVISED)." James continues his day. |
+| 13 | Future | Next technician on this workflow → Scenario A. James's contribution is attributed. |
 
 ---
 
-### 4.3 Scenario C — Teach-Me Mode (Step-Level Correction)
+### 4.3 Scenario C — Teach-Me Mode (Step-Level Correction with Voice)
 
-**Context:** Same as Scenario B, but James corrects a specific step by demonstrating it rather than typing a text correction. This is the full teach-me experience that achieves parity with Claude in Chrome.
+**Context:** Same as Scenario B, but James demonstrates the correct step rather than typing a text correction. This is the full teach-me experience with voice narration.
 
-| # | Actor | Action / System Response |
+| # | Actor | Action |
 |---|---|---|
-| 1 | James | In OptimizationPanel, clicks "Show me" next to the incorrect knowledge source step instead of typing a correction. |
-| 2 | Frontend | System enters teach-me mode. Recording indicator appears. James is prompted: "Navigate to the correct source for this step." |
-| 3 | Backend | Capture switches to teach-me mode. UIEvents now include: `element_context` (label, role, ARIA landmark), `screenshot_b64` per interaction, `capture_mode = "teach"`. |
-| 4 | **Backend** | **On each UIEvent in teach-me mode, micro-prompt call to Gemini generates `step_description` inline: e.g. "Opened the GIS PDF export for parcel R2-0041." Logged to CLI panel in real time.** |
-| 5 | James | Navigates to the GIS PDF. Clicks on the relevant section (parcel data block). System highlights the region. James clicks "Confirm source." |
-| 6 | Backend | VisionService analyses screenshot at click position. Confirms: `source_type=pdf`, `confidence=0.96`, `text_snippet="Parcel R2-0041-BW — Commercial C-2 zone."` |
-| 7 | Backend | Teach-me mode ends. Enriched event sequence (with `step_descriptions` and `element_context`) appended to correction prompt. SpecBuilderAgent regenerates spec. |
-| 8 | James | Updated spec shows corrected knowledge source with exact PDF section and confidence score. He publishes. |
+| 1 | James | In sidebar, clicks "Show me" next to the incorrect knowledge source step. |
+| 2 | Sidebar | Enters teach-me mode. Recording indicator appears in sidebar header. Prompt: "Navigate to the correct source for this step." |
+| 3 | Host UI | `capture.js` switches to teach-me mode. Microphone activates (Web Speech API). James narrates as he works. |
+| 4 | James | "I'm going to the GIS export..." — navigates to GIS PDF in host UI. Clicks the relevant parcel section. |
+| 5 | Backend | Per-interaction screenshot sent to VisionService. `step_description` = "Navigated to GIS PDF export for parcel R2-0041." Logged to CLI panel. |
+| 6 | James | Clicks "Confirm source" in sidebar. |
+| 7 | Backend | VisionService confirms region: `source_type=pdf`, `confidence=0.96`. Teach-me session ends. Enriched events (with `step_descriptions` + `element_context`) passed to SpecBuilderAgent. |
+| 8 | Sidebar | Updated spec shows corrected knowledge source: "GIS PDF — parcel export (conf 0.96)". James publishes. |
 
-> **The teach-me quality difference:** James never typed the source name manually. The system captured exactly which element he clicked, its DOM role and label, what Gemini Vision extracted from the screenshot, and generated a human-readable step label automatically. This is parity with Claude in Chrome's teach-me — except r4mi also knows *why* the value was chosen from *which policy source*, which Claude in Chrome cannot do.
+> **The teach-me advantage:** James narrated instead of typed. The system captured exactly which element he clicked, its DOM role and label, what Gemini Vision extracted from the screenshot, and generated a human-readable step label — automatically. r4mi also knows *why* the value was chosen from *which policy source*, which macro recorders cannot.
+
+---
+
+### 4.4 Scenario D — Standalone Proactive Teach-Me
+
+**Context:** Ahmed is an experienced technician. He knows he'll repeat the same demolition permit workflow all month. He wants to build the agent now, before the system has seen three sessions.
+
+| # | Actor | Action |
+|---|---|---|
+| 1 | Ahmed | Opens sidebar. Clicks Record button in header. |
+| 2 | Sidebar | "Recording started. Work through the workflow. Click Stop when done." Microphone activates. |
+| 3 | Ahmed | Works through demolition permit normally, narrating key decisions aloud. |
+| 4 | capture.js | Sends rich UIEvents with `capture_mode=teach`, `element_context`, per-step screenshots, voice `step_descriptions`. |
+| 5 | Ahmed | Clicks Stop. |
+| 6 | Backend | Session finalized. SpecBuilderAgent builds spec from rich teach-me events. Fires `SPEC_GENERATED`. |
+| 7 | Sidebar | Spec summary displayed. Ahmed reviews, publishes. Demolition permit agent live immediately — without waiting for three passive observations. |
 
 ---
 
 ## 5. Decisions
 
-All open questions resolved.
-
 **Q1 — MarketMatcher similarity metric: trace-vs-spec ✓**
-The adopt-path comparison runs the current session's trace embedding against published NarrowAgentSpec embeddings (spec text: name + description + action sequence). Spec embeddings are already computed at publish time, so no extra API call is needed. Trace-vs-spec answers "does this agent's stated capability cover what I just observed?" — which is exactly the right question for the adopt path.
+The adopt-path comparison runs the current session's trace embedding against published NarrowAgentSpec embeddings. Spec embeddings are computed at publish time. Trace-vs-spec answers "does this agent's stated capability cover what I just observed?" — the right question for the adopt path.
 
 **Q2 — Trust levels and human confirmation ✓**
-There is always a user-facing prompt before automation executes — no silent autonomous mode. The distinction between trust levels is the *weight* of confirmation required:
+There is always a user-facing gate before automation executes — no silent autonomous mode. The distinction between trust levels is the *weight* of confirmation required:
+- **SUPERVISED** (new agent, <10 runs): confirm each individual field batch as it fills
+- **AUTONOMOUS** (proven agent, high success rate): single upfront prompt covering the whole workflow, then all fields fill in one pass
 
-- **SUPERVISED** (new agent, <10 runs): confirm each individual step as it executes — e.g. "About to fill zone field with R-2 from GIS API. Proceed?"
-- **AUTONOMOUS** (proven agent, high success rate): single upfront prompt covering the whole workflow — "Automation available. Run it?" — then all steps execute in one pass.
-
-Color coding communicates trust at a glance: orange badge for SUPERVISED, green for AUTONOMOUS. The adopt card shows run count and trust level so the user can make an informed choice before activating.
+Color coding: orange badge for SUPERVISED, green for AUTONOMOUS.
 
 **Q3 — Teach-me mode activation: both ✓**
-Teach-me mode is available in two ways:
-1. **Correction flow** — "Show me" button on a specific step in OptimizationPanel, for correcting a step in an already-detected pattern.
-2. **Standalone record button** — user can initiate proactively before the system has detected three similar sessions. Power users who know they'll repeat a workflow can build the agent immediately.
+1. **Correction flow** — "Show me" button on a specific step in sidebar for an already-detected pattern.
+2. **Standalone record button** — proactive capture before three passive sessions.
 
-**Q4 — Step labelling: real-time with batching option ✓**
-Default: Gemini generates the step label immediately after each UIEvent in teach-me mode. Labels appear in the CLI panel as the user acts. A config flag (`STEP_LABEL_MODE=batch`) switches to batch mode — all labels generated at session end. Same code path, just deferred. Batch mode for cost-sensitive deployments.
+**Q4 — Step labelling: real-time with voice ✓**
+In teach-me mode, `step_description` comes from voice transcription first (Web Speech API), with Gemini Flash as fallback if no narration. A `STEP_LABEL_MODE=realtime|batch` flag switches between inline and deferred generation.
 
 **Q5 — Demo capture strategy: `capture.js` script tag ✓**
-This is an enterprise product — the host cooperates by including a script tag. The right demo path is to build `capture.js` as a self-contained vanilla JS observer (~150 lines) that:
-- Listens to real DOM events (clicks, inputs, form submissions, navigation)
-- Extracts `element_context` from the actual DOM (ARIA labels, roles, landmark)
-- POSTs enriched UIEvents to `/api/observe` automatically
+Enterprise integration model: one script tag, one config attribute, zero changes to the host app. `capture.js` is a self-contained vanilla JS observer (~250 lines) that listens to real DOM events, extracts `element_context` from ARIA landmarks, and POSTs enriched UIEvents to `/api/observe`.
 
-Included in the mock permit UI via:
 ```html
-<script src="/capture.js" data-api="http://localhost:8000"></script>
+<script src="/r4mi-loader.js" data-api="http://localhost:8000"></script>
 ```
 
-This is exactly the enterprise integration model — one script tag, one config attribute, zero changes to the host app. The demo and the product are the same thing. File lives at `frontend/public/capture.js` so Vite serves it as a static asset. Replaces the synthetic test harness for live demos while the E2E suite continues using seeded events.
+**Q6 — Frontend architecture: sidebar, not overlay ✓**
+All r4mi UI lives in the sidebar panel (iframe). The host UI is not modified with overlay components. Agent population and tab-progression gates are the only DOM interactions with the host page, and these happen via `r4mi-loader.js` postMessage relay — not via React components injected into the host.
 
-The `capture.js` item is promoted from P3 to **P1** given it directly enables authentic demo capture and validates the enterprise integration model early.
+**Q7 — NPM package as long-term integration target ✓**
+The dream integration: `npm install @r4mi/capture` (or `npx r4mi-ai init`). This wraps `capture.js` + `r4mi-loader.js` as a package a site administrator deploys in one command. No code changes to the host application. The script tag model and the npm model are the same underlying files — the package just manages versioning and delivery.
 
 ---
 
 ## 6. Enterprise Integration Model
 
-r4mi-ai is designed as an enterprise product where the host application cooperates with the observer. This means:
+r4mi-ai is designed as an enterprise product where the host application cooperates minimally with the observer. The cooperation surface is deliberately kept small.
 
-- The host includes `capture.js` via a script tag — no browser extension required, no IT approval process beyond a script deployment
-- Agents and specs stay **host-agnostic** — they reference semantic field identities (`zone_classification`, `max_permitted_height`) not UI-specific selectors (`#form > div:nth-child(3) > input`)
-- The host exposes stable semantic names for fields it wants to be automatable — this is the cooperation surface, kept deliberately minimal
-- `capture.js` derives `screen_name` from URL + ARIA landmarks, not from application-defined constants — no r4mi-specific code needs to be written per deployment
+**Integration surface:**
+- Host includes `r4mi-loader.js` via a script tag (or npm package)
+- Host exposes stable `data-field-id` attributes on automatable fields — these are the semantic field identities (`zone_classification`, `max_permitted_height`)
+- No other host-side code is required
 
-The goal is: one `capture.js` drop-in works across any web-based back-office system. Agents built on one deployment can be matched and adopted by another deployment of the same workflow type.
+**What r4mi does not require from the host:**
+- No host-specific constants in r4mi code
+- No API cooperation from the host application
+- No browser extension or IT approval beyond script deployment
+
+**What r4mi derives automatically from the host DOM:**
+- `screen_name` — from URL + document title + ARIA landmarks
+- `element_context` — from ARIA labels, roles, landmark regions, element position
+- Navigation events — from `popstate`, `hashchange`, History API
+
+**Agent portability:**
+- Agents reference semantic field identities, not CSS selectors
+- An agent built on one deployment can be matched and adopted by another deployment of the same workflow type
+- MarketMatcher operates on embedding similarity — no workflow-specific configuration needed
+
+**Integration steps for a site administrator:**
+```bash
+# Option A — script tag (any web app)
+<script src="https://cdn.r4mi.ai/loader.js" data-api="https://your-r4mi-instance.com"></script>
+
+# Option B — npm (Node-based apps)
+npm install @r4mi/capture
+# then in your app entry point:
+import '@r4mi/capture'   # self-initialising, reads data-r4mi-api attribute from <script> tag
+
+# Option C — npx one-liner (future target)
+npx r4mi-ai init         # downloads loader, adds script tag to index.html, sets up .env
+```
+
+The goal: a site administrator with no r4mi expertise can have the system running in under five minutes.

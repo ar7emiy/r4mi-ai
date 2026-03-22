@@ -28,6 +28,16 @@ export interface AgentSpec {
   created_at: string
 }
 
+export interface AgentCorrection {
+  agent_id: string
+  session_id: string
+  field_name: string
+  agent_value: string
+  corrected_value: string
+  reason?: string
+  timestamp: string
+}
+
 export interface DemoStep {
   step: number
   action: string
@@ -78,6 +88,14 @@ interface R4miState {
   appendDemoStep: (step: DemoStep) => void
   clearDemoSteps: () => void
 
+  // HITL approval gate — step currently awaiting user approval
+  pendingApprovalStep: DemoStep | null
+  setPendingApprovalStep: (step: DemoStep | null) => void
+
+  // Correction log — tracks field corrections made during agent runs
+  corrections: AgentCorrection[]
+  addCorrection: (c: AgentCorrection) => void
+
   // Agentverse
   publishedAgents: AgentSpec[]
   addPublishedAgent: (spec: AgentSpec) => void
@@ -124,6 +142,12 @@ export const useR4miStore = create<R4miState>((set) => ({
   appendDemoStep: (step) =>
     set((s) => ({ demoSteps: [...s.demoSteps, step] })),
   clearDemoSteps: () => set({ demoSteps: [] }),
+
+  pendingApprovalStep: null,
+  setPendingApprovalStep: (step) => set({ pendingApprovalStep: step }),
+
+  corrections: [],
+  addCorrection: (c) => set((s) => ({ corrections: [...s.corrections, c] })),
 
   publishedAgents: [],
   addPublishedAgent: (spec) =>

@@ -8,8 +8,8 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- r4mi-ai DOM capture layer: one script tag, one config attribute -->
-    <script src="/capture.js" data-api="http://localhost:8000" data-user-id="permit-tech-001"></script>
+    <!-- r4mi-ai: loader injects capture.js + creates sidebar iframe -->
+    <script src="/r4mi-loader.js" data-api="http://localhost:8000" data-user-id="permit-tech-001"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -9,7 +9,7 @@ Each decision includes rationale so context is never lost.
 
 - **No Chatwoot** — replaced by a purpose-built mock legacy permit UI
 - **No real database integrations** — all external systems are stub APIs reading from JSON
-- **No browser extension** — UI event capture is simulated via a test harness that POSTs mock UIEvent sequences
+- **No browser extension** — UI event capture is handled by `capture.js`, a vanilla JS script tag included in the host page. E2E tests use seeded UIEvent sequences; `capture.js` handles live captures.
 - **No authentication system** — single hardcoded user for the demo
 - **No cloud deployment** — everything runs locally via Docker Compose for the demo
 
@@ -27,11 +27,11 @@ All real-time updates from the backend arrive via Server-Sent Events (SSE).
 The frontend connects once to `/api/sse` on load and maintains that connection.
 No `setInterval`, no polling endpoints.
 
-**Key decision — Tab Progression Bar:**
-A persistent component fixed to the bottom of the screen showing active agent tasks.
-It is always visible regardless of which screen the user is on.
-It is the only place where r4mi-ai surfaces its presence during normal work.
-It must never interrupt the user's current workflow.
+**Key decision — Sidebar as primary r4mi UI surface:**
+r4mi's UI is a collapsible sidebar panel (iframe) injected into the host page by `r4mi-loader.js`.
+All notifications, chat presentation, spec review, agent cards, and teach-me controls live in the sidebar.
+The host page is untouched except for: field population via postMessage relay, and lightweight per-field gate overlays during HITL verification.
+Do NOT build overlay React components that embed into the host application. See PLAN.md §2.1–2.2.
 
 **Key decision — Mermaid diagram:**
 The system architecture diagram (UML activity, 3 swimlanes) is rendered client-side
@@ -118,22 +118,19 @@ State persists in SQLite. Each session has its own state machine instance.
 ## Data Flow
 
 ```
-Browser (mock legacy UI)
-  → user interacts with permit form
-  → UIEvent POSTed to /api/observe (simulated by test harness in demo)
+Host page (any web UI)
+  → capture.js observes DOM events, extracts element_context
+  → UIEvent POSTed to /api/observe
   → ObserverAgent processes event stream
   → Pattern state machine advances
-  → When READY: SSE event sent to frontend
-  → TabProgressionBar shows notification tab
-  → User opens tab, GET /api/session/{id}/replay
-  → Frontend plays back replay frames
-  → User confirms: POST /api/session/{id}/confirm/sequence
-  → User confirms sources: POST /api/session/{id}/confirm/sources
-  → MarketMatcher runs: GET /api/agents/match
-  → If match: NarrowAgent demo streams via SSE
-  → User tunes (optional): POST /api/agents/{id}/tune
-  → Publish: POST /api/agents/publish
-  → SSE: AGENT_PUBLISHED event to all connected clients
+  → When READY: MarketMatcher runs immediately (market-first detection)
+  → If match ≥ 0.85: SSE AGENT_MATCH_FOUND → sidebar adopt notification
+  → If no match: SSE OPTIMIZATION_OPPORTUNITY + background SpecBuilderAgent task
+  → Sidebar receives SSE → shows notification in chat thread
+  → User clicks notification in sidebar
+  → Adopt path: sidebar shows adopt card → Activate Agent → fields fill in host UI → tab-verify
+  → Build path: sidebar shows pre-generated spec → user corrects → Publish
+  → POST /api/agents/publish → SSE AGENT_PUBLISHED → sidebar confirms
 ```
 
 ---

@@ -170,12 +170,19 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
   await test.step('Beat 5 — "Review & Validate" button opens ValidationReplay', async () => {
     await page.getByRole('button', { name: 'Review & Validate Workflow' }).click()
     await expect(page.getByText('HITL VALIDATION REPLAY')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Begin Validation Replay' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Begin.*Validation/i })).toBeVisible()
   })
 
-  await test.step('Beat 5 — ValidationReplay animates agent steps on Application Form', async () => {
-    await page.getByRole('button', { name: 'Begin Validation Replay' }).click()
-    // Animation plays through spec action steps
+  await test.step('Beat 5 — ValidationReplay animates agent steps, user approves each gate', async () => {
+    await page.getByRole('button', { name: /Begin.*Validation/i }).click()
+    // Click through per-step approval gates (one per field in the spec action sequence)
+    for (let i = 0; i < 5; i++) {
+      const approveBtn = page.getByRole('button', { name: 'Looks good — continue' })
+      const visible = await approveBtn.isVisible().catch(() => false)
+      if (!visible) break
+      await approveBtn.click()
+      await page.waitForTimeout(300)
+    }
     await expect(page.getByText('Validation Complete')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByRole('button', { name: 'Publish to Agentverse' })).toBeVisible()
   })
@@ -210,14 +217,15 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
     await page.getByRole('button', { name: /Automate/i }).click()
   })
 
-  await test.step('Beat 6 — Zone and Max Height fields auto-fill with source tags', async () => {
-    // Fields fill via typing animation from NarrowAgent AGENT_DEMO_STEP SSE events
-    await expect(page.locator('[data-testid="field-zone"]')).toHaveValue('R-2', {
-      timeout: 15_000,
-    })
-    await expect(page.locator('[data-testid="field-max-height"]')).toHaveValue('6 ft', {
-      timeout: 15_000,
-    })
+  await test.step('Beat 6 — Zone field fills, user approves gate, Max Height fills, user approves', async () => {
+    // Zone fills first — wait for approval gate then approve
+    await expect(page.locator('[data-testid="field-zone"]')).toHaveValue('R-2', { timeout: 15_000 })
+    await expect(page.getByRole('button', { name: 'Looks good — continue' })).toBeVisible({ timeout: 5_000 })
+    await page.getByRole('button', { name: 'Looks good — continue' }).click()
+    // Max Height fills after first gate is approved
+    await expect(page.locator('[data-testid="field-max-height"]')).toHaveValue('6 ft', { timeout: 15_000 })
+    await expect(page.getByRole('button', { name: 'Looks good — continue' })).toBeVisible({ timeout: 5_000 })
+    await page.getByRole('button', { name: 'Looks good — continue' }).click()
     // Source tags visible (from GIS API, from PDF §14.3)
     await expect(page.getByText('from GIS API')).toBeVisible()
     await expect(page.getByText(/PDF §14\.3/i)).toBeVisible()

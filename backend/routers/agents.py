@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 
 from db import get_session
 from models.agent_spec import NarrowAgentSpec, TrustLevel
-from models.session import SessionRecord, PatternState
+from models.session import SessionRecord, PatternState, AgentCorrection
 from agents.spec_builder_agent import spec_builder_agent
 from agents.market_matcher import market_matcher
 from agents.narrow_agent import narrow_agent
@@ -47,11 +47,28 @@ async def build_spec(
     if not record:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    try:
-        spec = await spec_builder_agent.build_spec(record, correction=body.correction)
-    except QuotaExhaustedException:
-        await sse_bus.publish("AGENT_EXCEPTION", {"reason": "quota_exhausted"})
-        raise HTTPException(status_code=503, detail="quota_exhausted")
+    # Reuse cached draft if no correction and draft exists
+    if not body.correction and record.candidate_spec_draft:
+        logger.info(f"[SpecBuilder] Reusing cached draft for session {body.session_id}")
+        spec = await spec_builder_agent.spec_from_draft(record.candidate_spec_draft, record)
+    else:
+        try:
+            spec = await spec_builder_agent.build_spec(record, correction=body.correction)
+        except QuotaExhaustedException:
+            await sse_bus.publish("AGENT_EXCEPTION", {"reason": "quota_exhausted"})
+            raise HTTPException(status_code=503, detail="quota_exhausted")
+
+        # Cache the draft on the session record
+        record.candidate_spec_draft = {
+            "name": spec.name,
+            "description": spec.description,
+            "permit_type": spec.permit_type,
+            "trigger_pattern": spec.trigger_pattern,
+            "action_sequence": spec.action_sequence,
+            "knowledge_sources": spec.knowledge_sources,
+        }
+        db.add(record)
+        db.commit()
 
     # Check market for existing match
     match_result = await market_matcher.find_match(spec, db)
@@ -116,11 +133,20 @@ async def publish_agent(
             logger.info(f"[Agentverse] Session {body.session_id} already published as {existing.id[:8]}, returning existing spec")
             return existing.model_dump(exclude={"embedding"})
 
-    try:
-        spec = await spec_builder_agent.build_spec(record)
-    except QuotaExhaustedException:
-        await sse_bus.publish("AGENT_EXCEPTION", {"reason": "quota_exhausted"})
-        raise HTTPException(status_code=503, detail="quota_exhausted")
+    # Reuse cached draft if available — avoids duplicate Gemini call
+    if record.candidate_spec_draft:
+        logger.info(f"[Agentverse] Reusing cached spec draft for session {body.session_id}")
+        try:
+            spec = await spec_builder_agent.spec_from_draft(record.candidate_spec_draft, record)
+        except QuotaExhaustedException:
+            await sse_bus.publish("AGENT_EXCEPTION", {"reason": "quota_exhausted"})
+            raise HTTPException(status_code=503, detail="quota_exhausted")
+    else:
+        try:
+            spec = await spec_builder_agent.build_spec(record)
+        except QuotaExhaustedException:
+            await sse_bus.publish("AGENT_EXCEPTION", {"reason": "quota_exhausted"})
+            raise HTTPException(status_code=503, detail="quota_exhausted")
     spec.updated_at = datetime.utcnow()
 
     db.add(spec)
@@ -211,6 +237,40 @@ async def tune_agent(
     })
 
     return forked.model_dump(exclude={"embedding"})
+
+
+class CorrectionRequest(BaseModel):
+    agent_id: str
+    session_id: str
+    field_name: str
+    agent_value: str
+    corrected_value: str
+    reason: Optional[str] = None
+    timestamp: Optional[str] = None
+
+
+@router.post("/api/agents/{spec_id}/correction")
+def log_correction(
+    spec_id: str,
+    body: CorrectionRequest,
+    db: Session = Depends(get_session),
+):
+    """Persist a HITL field correction made during an agent run."""
+    correction = AgentCorrection(
+        agent_id=spec_id,
+        session_id=body.session_id,
+        field_name=body.field_name,
+        agent_value=body.agent_value,
+        corrected_value=body.corrected_value,
+        reason=body.reason,
+    )
+    db.add(correction)
+    db.commit()
+    logger.info(
+        f"[HITL] Correction logged — agent={spec_id[:8]} field={body.field_name} "
+        f"'{body.agent_value}' → '{body.corrected_value}'"
+    )
+    return {"status": "ok"}
 
 
 @router.post("/api/agents/{spec_id}/run")

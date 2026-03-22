@@ -3,10 +3,14 @@ import os
 import time
 import numpy as np
 from google import genai
+from google.genai import types
 
 from services.log_streamer import logger
 from services.exceptions import QuotaExhaustedException
 from models.event import ActionTrace
+
+EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_DIMS = 768  # match legacy text-embedding-004 output size
 
 
 class EmbeddingService:
@@ -22,8 +26,9 @@ class EmbeddingService:
         t0 = time.time()
         try:
             result = await self.client.aio.models.embed_content(
-                model="models/text-embedding-004",
+                model=EMBEDDING_MODEL,
                 contents=text,
+                config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIMS),
             )
         except Exception as e:
             msg = str(e)
@@ -37,7 +42,7 @@ class EmbeddingService:
 
         token_estimate = len(text.split())
         logger.info(
-            f"[Embedding] text-embedding-004 called | key={cache_key} | "
+            f"[Embedding] {EMBEDDING_MODEL} called | key={cache_key} | "
             f"~{token_estimate} tokens | {len(vector)} dims | {latency_ms}ms"
         )
         return vector

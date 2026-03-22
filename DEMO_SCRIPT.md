@@ -12,7 +12,7 @@ Do not build features that don't appear here. Do not omit anything that does.
 - 2 prior sessions already seeded for Workflow 1 (Fence Variance)
 - Agentverse is empty — no published agents yet
 - Mock legacy UI open on Application Inbox screen
-- Tab Progression Bar visible at bottom, showing "No active agents"
+- r4mi sidebar visible on the right, showing an empty chat thread
 
 ---
 
@@ -50,43 +50,43 @@ workflow I've done dozens of times this week."
 ## Beat 2 — The Detection (0:40–0:55)
 
 **What the viewer sees:**
-Immediately after submitting, a subtle notification appears in the Tab Progression
-Bar at the bottom. It doesn't interrupt. It just glows.
+Immediately after submitting, a notification appears in the r4mi sidebar. It doesn't
+interrupt. The operator is free to keep working.
 
 **Actions:**
-1. Tab Progression Bar notification appears: "🔍 Optimization opportunity detected"
-2. Operator pauses, notices it
-3. Clicks the notification tab
+1. Sidebar chat shows a notification message: "I've seen this workflow 3 times. I think I can help."
+2. Operator pauses, glances at sidebar
+3. Clicks the notification / "Review" button
 
 **UI requirements for this beat:**
-- Tab Progression Bar must show a glowing/pulsing notification badge
-- Notification must not be a modal, alert, or popup that interrupts the screen
-- Clicking opens the Optimization Panel as a right-side drawer or bottom sheet
-- Optimization Panel header: "r4mi-ai detected a repetitive workflow"
-- Subtext: "I've seen this pattern 3 times. Here's what I observed."
+- Sidebar notification must appear without any modal, alert, or popup on the host page
+- The host page is untouched — only the sidebar chat thread updates
+- Notification shows match count and a brief description of the detected pattern
+- "Review" button or clickable notification opens the build/adopt flow within the sidebar
 
 ---
 
 ## Beat 3 — The Replay (0:55–1:25)
 
 **What the viewer sees:**
-The system plays back a distilled version of the workflow — fewer steps than what
-the operator just did. The operator watches it happen automatically.
+The sidebar presents a short summary then a step-by-step preview of what the agent
+would do. The actual host form fields fill automatically.
 
 **Actions:**
-1. Optimization Panel shows: "You completed this in 5 screens. Here's the distilled version:"
-2. Agent demo begins — animated replay showing:
-   - Form field "Zone" auto-populated (no GIS navigation)
-   - Form field "Max Permitted Height" auto-populated (no policy navigation)
-   - Decision note auto-generated
-3. Replay completes. Panel shows: "3 screens → 1 screen. Same result."
-4. Below: two confirmation prompts visible
+1. Sidebar shows a summary chat message: "You navigated 5 screens. Here's the distilled version:"
+2. Sidebar replay preview animates step descriptions one by one:
+   - "Fetching zone classification from GIS API... R-2" (source tag: "from GIS API")
+   - "Looking up max height from PDF §14.3... 6 ft" (source tag: "from PDF §14.3")
+   - "Generating decision notes..."
+3. Simultaneously, host form fields fill with typing animation
+4. Sidebar confirms: "3 screens → 1 screen. Same result."
 
 **UI requirements for this beat:**
-- Replay must visually show form fields being filled one by one with a typing animation
-- Each field fill should show a small source tag: e.g. "from GIS API" / "from §14.3"
+- Replay preview is inside the sidebar (step descriptions + source tags), not a reproduced form
+- Actual field population happens in the real host form via postMessage relay
+- Each field fill animates with a typing effect
+- Source tags visible on each auto-filled field in the host form
 - Replay speed: comfortable to watch, ~2 seconds per field
-- After replay: show side-by-side "Your path: 5 screens" vs "Agent path: 1 screen"
 
 ---
 
@@ -108,13 +108,12 @@ policy lookup, but the operator knows the authoritative source is the PDF, not t
 7. Operator confirms: "Yes, that's correct"
 
 **UI requirements for this beat:**
-- Correction text input field in Optimization Panel (multiline, min 3 rows)
-- "Show me" button that puts the UI into "demonstration mode"
-- In demonstration mode: a subtle red border around the screen + banner:
-  "r4mi-ai is watching — navigate to the correct source"
+- Correction text input is the sidebar chat input (multiline)
+- "Show me" button appears in the sidebar on the relevant step card
+- In teach-me mode: a subtle banner on the host page: "r4mi-ai is watching — navigate to the correct source" (injected by r4mi-loader.js, not a React overlay component)
 - Policy Reference screen must have both a Wiki tab and a PDF Viewer tab
-- Clicking a paragraph in PDF Viewer in demonstration mode registers it as a source
-- After demonstration: system confirms "Source updated: PDF §14.3 (Page 4)"
+- Clicking a paragraph in PDF Viewer while in teach-me mode registers it as a source (capture.js intercepts the click)
+- After demonstration: sidebar confirms "Source updated: PDF §14.3 (Page 4)"
 
 ---
 
@@ -132,10 +131,9 @@ The corrected agent spec is shown. The operator approves and publishes.
 3. Confirmation animation plays — agent card appears in agentverse
 
 **UI requirements for this beat:**
-- Spec summary must be human-readable — no raw JSON visible
-- Publish button is prominent, green
-- After publish: a brief "published" animation (card flies into agentverse panel)
-- Tab Progression Bar updates: "1 agent active"
+- Spec summary is displayed as a chat message in the sidebar — human-readable, no raw JSON
+- Publish button is prominent, green, inside the sidebar
+- After publish: sidebar shows agent card confirmation ("Agent published: Fence Variance — R-2 Zone Check")
 
 ---
 
@@ -157,9 +155,9 @@ This time, the agent handles it automatically.
 
 **UI requirements for this beat:**
 - Second application must be pre-seeded in the inbox
-- Auto-fill must visually animate (not instant — typing effect)
-- Source tags must be visible on each auto-filled field
-- Tab Progression Bar updates in real time
+- Auto-fill animates with typing effect in the real host form (not instant)
+- Source tags visible on each auto-filled field in the host form
+- Sidebar shows agent run status: "Running Fence Variance agent..." then "Run complete — 3 fields processed"
 
 ---
 
@@ -169,8 +167,8 @@ This time, the agent handles it automatically.
 A brief cut to the Agentverse panel showing the published agent with its metadata.
 
 **Actions:**
-1. Click "Agentverse" tab in Tab Progression Bar
-2. Agentverse panel shows the published agent card:
+1. Click "Agents" button in sidebar header
+2. Agentverse drawer opens showing the published agent card:
    - Name: "Fence Variance — R-2 Zone Check"
    - Author: current user
    - Trust Level: Supervised
@@ -179,9 +177,9 @@ A brief cut to the Agentverse panel showing the published agent with its metadat
 3. End screen / logo
 
 **UI requirements for this beat:**
-- Agentverse panel is a clean card grid (not a table)
-- Each card shows: name, author, trust badge, run count, contribution %
-- Trust badge colors: Supervised = yellow, Autonomous = green, Stale = red
+- Agentverse is a drawer inside the sidebar (not a separate page or overlay)
+- Agent cards: name, author, trust badge, run count, contribution %
+- Trust badge colors: Supervised = orange, Autonomous = green, Stale = red
 
 ---
 

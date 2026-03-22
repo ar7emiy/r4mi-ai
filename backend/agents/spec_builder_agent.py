@@ -210,5 +210,31 @@ Return valid JSON matching the schema. No markdown, no explanation.
         )
         return spec
 
+    async def spec_from_draft(
+        self,
+        draft: dict,
+        session: SessionRecord,
+    ) -> NarrowAgentSpec:
+        """Reconstruct a NarrowAgentSpec from a cached draft dict (no Gemini call)."""
+        spec_text = f"{draft['name']} {draft['description']} {json.dumps(draft['action_sequence'])}"
+        embedding = await embedding_service.embed(
+            spec_text, cache_key=f"spec:draft:{session.session_id}"
+        )
+        return NarrowAgentSpec(
+            id=str(uuid4()),
+            name=draft["name"],
+            description=draft["description"],
+            permit_type=draft["permit_type"],
+            trigger_pattern=draft["trigger_pattern"],
+            action_sequence=draft["action_sequence"],
+            knowledge_sources=draft["knowledge_sources"],
+            embedding=embedding,
+            trust_level=TrustLevel.SUPERVISED,
+            source_session_id=session.session_id,
+            contributions=[
+                {"user_id": session.user_id, "role": "author", "share_pct": 100}
+            ],
+        )
+
 
 spec_builder_agent = SpecBuilderAgent()

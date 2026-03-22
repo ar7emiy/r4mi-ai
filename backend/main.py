@@ -13,11 +13,11 @@ from sqlalchemy import text
 
 from db import create_db_and_tables, engine
 from services.log_streamer import logger
-from models.session import SessionRecord, PatternState
+from models.session import SessionRecord, PatternState, AgentCorrection  # noqa: F401
 from models.event import UIEvent, ActionTrace
 
 # ── routers ──────────────────────────────────────────────────────────────────
-from routers import observe, session, agents, evidence, stubs, sse, logs
+from routers import observe, session, agents, evidence, stubs, sse, logs, chat, kanban
 
 
 def _make_events(session_id: str, user_id: str, base_time: datetime,
@@ -248,7 +248,7 @@ app = FastAPI(title="r4mi-ai", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://frontend:3000"],
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -261,6 +261,8 @@ app.include_router(evidence.router)
 app.include_router(stubs.router)
 app.include_router(sse.router)
 app.include_router(logs.router)
+app.include_router(chat.router)
+app.include_router(kanban.router)
 
 
 @app.get("/health")

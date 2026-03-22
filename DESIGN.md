@@ -13,11 +13,13 @@ The frontend has two distinct visual identities that must never bleed into each 
 ### Layer 1 — The Legacy Permit System
 Everything inside the main work area. Looks old, dense, institutional.
 
-### Layer 2 — r4mi-ai Overlay
-The Tab Progression Bar, Optimization Panel, Replay, Agentverse.
-Looks modern, clean, minimal. Dark mode preferred. Uses a distinct accent color.
+### Layer 2 — r4mi-ai Sidebar
+The sidebar panel (iframe injected by r4mi-loader.js): chat thread, record button, agents drawer.
+Also: lightweight field source tags and per-field approval gate overlays written into the host form by r4mi-loader.js.
+Looks modern, clean, minimal. Dark mode (`#0f1117` background). Uses a distinct accent color (`#6366f1` indigo).
 
 The contrast between these two layers communicates the product's value without words.
+Layer 2 never bleeds into Layer 1's visual design — they are deliberately jarring together.
 
 ---
 

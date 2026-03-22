@@ -60,11 +60,10 @@ test('frontend loads: APPLICATION INBOX is visible', async ({ page }) => {
   await expect(page.getByText('Margaret Hollis')).toBeVisible()
 })
 
-test('frontend: Tab Progression Bar is rendered with nav buttons', async ({ page }) => {
+test('frontend: r4mi-ai sidebar toggle button is rendered', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByText('r4mi-ai')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Agentverse/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'CLI' })).toBeVisible()
+  // The loader script injects a floating toggle button
+  await expect(page.locator('#r4mi-toggle')).toBeVisible({ timeout: 5000 })
 })
 
 test('frontend: clicking PRM-2024-0041 row opens Application Form', async ({ page }) => {

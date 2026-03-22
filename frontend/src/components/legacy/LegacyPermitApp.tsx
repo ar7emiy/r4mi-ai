@@ -30,13 +30,11 @@ const TAB_LABELS: Record<Tab, string> = {
 export function LegacyPermitApp() {
   const [activeTab, setActiveTab] = useState<Tab>('inbox')
   const [brokenLink, setBrokenLink] = useState<string | null>(null)
-  const demoMode = useR4miStore((s) => s.demoMode)
-  const setDemoMode = useR4miStore((s) => s.setDemoMode)
-  const isRecording = useR4miStore((s) => s.isRecording)
-  const setIsRecording = useR4miStore((s) => s.setIsRecording)
-  const demoSteps = useR4miStore((s) => s.demoSteps)
   const navigateTo = useR4miStore((s) => s.navigateTo)
   const setNavigateTo = useR4miStore((s) => s.setNavigateTo)
+  const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
+  const demoMode = useR4miStore((s) => s.demoMode)
+  const setDemoMode = useR4miStore((s) => s.setDemoMode)
 
   // When the overlay requests navigation, switch the active tab and clear the request
   useEffect(() => {
@@ -46,64 +44,61 @@ export function LegacyPermitApp() {
     }
   }, [navigateTo])
 
-  const activeDemoStep = demoSteps.length > 0 ? demoSteps[demoSteps.length - 1] : null
-  const activeSource = activeDemoStep?.source_tag?.toLowerCase() || ''
+  // Sync active application ID to body so r4mi-loader.js can read it
+  useEffect(() => {
+    if (activeApplicationId) {
+      document.body.dataset.activeApplicationId = activeApplicationId
+    } else {
+      delete document.body.dataset.activeApplicationId
+    }
+  }, [activeApplicationId])
 
-  function getTabPulse(tab: Tab) {
-    if (!activeDemoStep) return false
-    if (tab === 'gis' && activeSource.includes('gis')) return true
-    if (tab === 'policy' && (activeSource.includes('policy') || activeSource.includes('§') || activeSource.includes('pdf'))) return true
-    if (tab === 'owner-registry' && activeSource.includes('owner')) return true
-    return false
-  }
+  // Listen for r4mi:show-me from loader — navigate to policy tab and enter teach-me mode
+  useEffect(() => {
+    function onShowMe(e: Event) {
+      const detail = (e as CustomEvent).detail
+      const tab = (detail?.targetTab ?? 'policy') as Tab
+      setActiveTab(tab)
+      setDemoMode(true)
+    }
+    window.addEventListener('r4mi:show-me', onShowMe)
+    return () => window.removeEventListener('r4mi:show-me', onShowMe)
+  }, [setDemoMode])
 
   return (
     <div
       style={{
-        minHeight: 'calc(100vh - 48px)',
+        minHeight: '100vh',
         background: '#f0f0f0',
-        outline: demoMode ? '3px solid #dc2626' : 'none',
         position: 'relative',
       }}
     >
+      {/* Teach-me recording banner */}
       {demoMode && (
         <div
+          data-testid="recording-banner"
           style={{
             background: '#dc2626',
             color: '#fff',
-            textAlign: 'center',
-            padding: '6px 12px',
-            fontFamily: 'Arial, sans-serif',
-            fontSize: 12,
-            fontWeight: 'bold',
-            letterSpacing: 1,
+            padding: '8px 16px',
             display: 'flex',
-            justifyContent: 'space-between',
             alignItems: 'center',
+            gap: 8,
+            fontFamily: 'Arial, sans-serif',
+            fontSize: 13,
+            fontWeight: 600,
           }}
         >
-          <div style={{ flex: 1 }}>
-            {isRecording ? '🤖 CUA MODEL: RECORDING WORKFLOW — NAVIGATE TO THE CORRECT SOURCE' : 'r4mi-ai IS WATCHING — NAVIGATE TO THE CORRECT SOURCE'}
-          </div>
-          <button
-            onClick={() => {
-              setDemoMode(false)
-              setIsRecording(false)
-            }}
-            style={{
-              background: '#fff',
-              border: 'none',
-              color: '#dc2626',
-              padding: '2px 10px',
-              borderRadius: 4,
-              fontSize: 11,
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              textTransform: 'uppercase',
-            }}
-          >
-            Stop & Confirm
-          </button>
+          <span style={{
+            display: 'inline-block',
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: '#fff',
+            animation: 'pulse 1s ease-in-out infinite',
+          }} />
+          RECORDING WORKFLOW — click the authoritative source
+          <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
         </div>
       )}
 
@@ -138,56 +133,30 @@ export function LegacyPermitApp() {
           gap: 2,
         }}
       >
-        {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => {
-          const isPulsing = getTabPulse(tab)
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: '4px 12px',
-                fontSize: 11,
-                fontFamily: 'Arial',
-                fontWeight: 'bold',
-                letterSpacing: 0.5,
-                background: activeTab === tab ? '#fff' : isPulsing ? '#6366f1' : '#c0c0c0',
-                border: '1px solid #999',
-                borderBottom: activeTab === tab ? '1px solid #fff' : '1px solid #999',
-                cursor: 'pointer',
-                color: activeTab === tab ? '#000' : isPulsing ? '#fff' : '#000',
-                marginBottom: activeTab === tab ? -2 : 0,
-                position: 'relative',
-                zIndex: activeTab === tab ? 1 : 0,
-                animation: isPulsing ? 'pulse-blue 1.5s infinite' : 'none',
-              }}
-            >
-              {TAB_LABELS[tab]}
-              {isPulsing && (
-                <div style={{
-                  position: 'absolute',
-                  top: -6,
-                  right: -6,
-                  background: '#6366f1',
-                  color: '#fff',
-                  fontSize: 8,
-                  padding: '1px 4px',
-                  borderRadius: 8,
-                  border: '1px solid #fff'
-                }}>
-                  FETCHING
-                </div>
-              )}
-            </button>
-          )
-        })}
+        {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '4px 12px',
+              fontSize: 11,
+              fontFamily: 'Arial',
+              fontWeight: 'bold',
+              letterSpacing: 0.5,
+              background: activeTab === tab ? '#fff' : '#c0c0c0',
+              border: '1px solid #999',
+              borderBottom: activeTab === tab ? '1px solid #fff' : '1px solid #999',
+              cursor: 'pointer',
+              color: '#000',
+              marginBottom: activeTab === tab ? -2 : 0,
+              position: 'relative',
+              zIndex: activeTab === tab ? 1 : 0,
+            }}
+          >
+            {TAB_LABELS[tab]}
+          </button>
+        ))}
       </div>
-      <style>{`
-        @keyframes pulse-blue {
-          0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
-          70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
-        }
-      `}</style>
 
       {/* Main content */}
       <div style={{ display: 'flex', minHeight: 500 }}>
@@ -291,7 +260,7 @@ export function LegacyPermitApp() {
                 background: '#c0392b', color: '#fff', border: '1px solid #7f0000',
                 width: 16, height: 16, fontSize: 10, cursor: 'pointer', fontWeight: 'bold',
                 lineHeight: '14px', padding: 0,
-              }}>✕</button>
+              }}>&#x2715;</button>
             </div>
 
             {/* Address bar */}
@@ -312,7 +281,7 @@ export function LegacyPermitApp() {
             {/* Body */}
             <div style={{ padding: '20px 24px 16px', background: '#fff' }}>
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16 }}>
-                <div style={{ fontSize: 48, lineHeight: 1 }}>🚫</div>
+                <div style={{ fontSize: 48, lineHeight: 1 }}>&#x1F6AB;</div>
                 <div>
                   <div style={{ fontSize: 18, fontWeight: 'bold', color: '#c0392b', marginBottom: 4 }}>
                     Internet Explorer cannot display the webpage
@@ -333,7 +302,7 @@ export function LegacyPermitApp() {
                 background: '#ffffcc', border: '1px solid #cccc00',
                 padding: '6px 10px', fontSize: 11, color: '#555', marginBottom: 12,
               }}>
-                ⚠️ &nbsp;This page requires <b>Internet Explorer 6.0</b> or higher with ActiveX enabled.<br />
+                &#x26A0;&#xFE0F; &nbsp;This page requires <b>Internet Explorer 6.0</b> or higher with ActiveX enabled.<br />
                 Contact IT helpdesk ext. <b>4722</b> for access issues.
               </div>
 

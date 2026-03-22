@@ -21,7 +21,9 @@ async def sse_stream():
         try:
             while True:
                 event = await queue.get()
-                yield {"event": event["type"], "data": json.dumps(event["data"])}
+                # Send as unnamed "message" event so EventSource.onmessage fires.
+                # The event type is included in the JSON payload for client-side routing.
+                yield {"data": json.dumps({"event": event["type"], "data": event["data"]})}
         finally:
             sse_bus.unsubscribe(queue)
 

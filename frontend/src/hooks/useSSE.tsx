@@ -25,52 +25,47 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     const es = new EventSource('/api/sse')
     esRef.current = es
 
-    es.addEventListener('OPTIMIZATION_OPPORTUNITY', (e) => {
-      const data = JSON.parse(e.data)
-      setOpportunitySessionId(data.session_id)
-    })
+    es.onmessage = (e) => {
+      try {
+        const raw = JSON.parse(e.data)
+        const event = raw.event as string
+        const data = raw.data as Record<string, unknown>
 
-    es.addEventListener('AGENT_MATCH_FOUND', (e) => {
-      const data = JSON.parse(e.data)
-      if (data.matched_spec) {
-        setMatchedAgent(data.matched_spec, data.matched_spec.match_score ?? null)
+        switch (event) {
+          case 'OPTIMIZATION_OPPORTUNITY':
+            setOpportunitySessionId(data.session_id as string)
+            break
+          case 'AGENT_MATCH_FOUND':
+            if (data.matched_spec) {
+              const spec = data.matched_spec as Record<string, unknown>
+              setMatchedAgent(spec as any, (spec.match_score as number) ?? null)
+            }
+            setOpportunitySessionId(data.session_id as string)
+            break
+          case 'SPEC_GENERATED':
+          case 'SPEC_UPDATED':
+            setCurrentSpec(data.spec as any)
+            break
+          case 'AGENT_PUBLISHED':
+            addPublishedAgent(data as any)
+            break
+          case 'AGENT_DEMO_STEP':
+            appendDemoStep(data as any)
+            break
+          case 'AGENT_EXCEPTION':
+            if (data.reason === 'quota_exhausted') setQuotaExhausted(true)
+            break
+          case 'AGENT_RUN_COMPLETE':
+            updatePublishedAgent({
+              id: data.spec_id as string,
+              successful_runs: data.successful_runs as number,
+            })
+            break
+        }
+      } catch {
+        // ignore malformed SSE messages
       }
-      setOpportunitySessionId(data.session_id)
-    })
-
-    es.addEventListener('SPEC_GENERATED', (e) => {
-      const data = JSON.parse(e.data)
-      // Store the pre-generated spec; don't force-open the panel (user opens on their own time)
-      setCurrentSpec(data.spec)
-    })
-
-    es.addEventListener('SPEC_UPDATED', (e) => {
-      const data = JSON.parse(e.data)
-      setCurrentSpec(data.spec)
-    })
-
-    es.addEventListener('AGENT_PUBLISHED', (e) => {
-      const data = JSON.parse(e.data)
-      addPublishedAgent(data)
-    })
-
-    es.addEventListener('AGENT_DEMO_STEP', (e) => {
-      const data = JSON.parse(e.data)
-      appendDemoStep(data)
-    })
-
-    es.addEventListener('AGENT_EXCEPTION', (e) => {
-      const data = JSON.parse(e.data)
-      if (data.reason === 'quota_exhausted') setQuotaExhausted(true)
-    })
-
-    es.addEventListener('AGENT_RUN_COMPLETE', (e) => {
-      const data = JSON.parse(e.data)
-      updatePublishedAgent({
-        id: data.spec_id,
-        successful_runs: data.successful_runs,
-      })
-    })
+    }
 
     es.onerror = () => {
       // SSE will auto-reconnect

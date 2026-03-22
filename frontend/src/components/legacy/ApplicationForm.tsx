@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useR4miStore } from '../../store/r4mi.store'
+import { useR4miStore, DemoStep } from '../../store/r4mi.store'
 import { useAgentverse } from '../../hooks/useAgentverse'
+import { ApprovalGate } from '../overlay/ApprovalGate'
+
+const DEMO_SESSION_ID = 'session_demo_live'
 
 interface SourceTag {
   field: string
@@ -51,6 +54,7 @@ export function ApplicationForm() {
   const demoSteps = useR4miStore((s) => s.demoSteps)
   const storeAgents = useR4miStore((s) => s.publishedAgents)
   const clearDemoSteps = useR4miStore((s) => s.clearDemoSteps)
+  const addCorrection = useR4miStore((s) => s.addCorrection)
   const { data: fetchedAgents = [] } = useAgentverse()
   // Prefer SSE-populated store; fall back to DB fetch (survives page reload)
   const publishedAgents = storeAgents.length ? storeAgents : fetchedAgents
@@ -70,36 +74,72 @@ export function ApplicationForm() {
   const [notes, setNotes] = useState('')
   const [sourceTags, setSourceTags] = useState<SourceTag[]>([])
   const [submitted, setSubmitted] = useState(false)
+  const [gateStep, setGateStep] = useState<DemoStep | null>(null)
+  const [approvalCount, setApprovalCount] = useState(0)
+  const processedCountRef = useRef(0)
 
-  // Apply demo step auto-fill with typing animation
+  // Apply demo step auto-fill with typing animation, one step at a time with approval gate
   useEffect(() => {
-    if (demoSteps.length === 0) return
-    const latestStep = demoSteps[demoSteps.length - 1]
-    const field = latestStep.field?.toLowerCase() ?? ''
+    const nextIndex = processedCountRef.current
+    if (demoSteps.length <= nextIndex) return
+    if (gateStep !== null) return  // wait for approval before processing next step
+
+    const step = demoSteps[nextIndex]
+    const field = step.field?.toLowerCase() ?? ''
 
     async function apply() {
       if (field.includes('zone')) {
-        await typeValue(latestStep.value, setZone)
+        await typeValue(step.value, setZone)
         setSourceTags((prev) => [
           ...prev.filter((t) => t.field !== 'zone'),
-          { field: 'zone', value: latestStep.value, source: latestStep.source_tag },
+          { field: 'zone', value: step.value, source: step.source_tag },
         ])
       } else if (field.includes('note') || field.includes('decision')) {
-        await typeValue(latestStep.value, setNotes)
+        await typeValue(step.value, setNotes)
         setSourceTags((prev) => [
           ...prev.filter((t) => t.field !== 'notes'),
-          { field: 'notes', value: latestStep.value, source: latestStep.source_tag },
+          { field: 'notes', value: step.value, source: step.source_tag },
         ])
       } else if (field.includes('height') || field.includes('max')) {
-        await typeValue(latestStep.value, setMaxHeight)
+        await typeValue(step.value, setMaxHeight)
         setSourceTags((prev) => [
           ...prev.filter((t) => t.field !== 'max_height'),
-          { field: 'max_height', value: latestStep.value, source: latestStep.source_tag },
+          { field: 'max_height', value: step.value, source: step.source_tag },
         ])
       }
+      setGateStep(step)
     }
     apply()
-  }, [demoSteps])
+  }, [demoSteps, approvalCount])  // approvalCount re-triggers after each approval
+
+  function handleStepApprove() {
+    processedCountRef.current++
+    setGateStep(null)
+    setApprovalCount((c) => c + 1)
+  }
+
+  function handleStepCorrect(correctedValue: string, reason?: string) {
+    if (gateStep && match) {
+      const correction = {
+        agent_id: match.id,
+        session_id: DEMO_SESSION_ID,
+        field_name: gateStep.field,
+        agent_value: gateStep.value,
+        corrected_value: correctedValue,
+        reason,
+        timestamp: new Date().toISOString(),
+      }
+      addCorrection(correction)
+      fetch(`/api/agents/${match.id}/correction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(correction),
+      }).catch(() => {/* non-blocking */})
+    }
+    processedCountRef.current++
+    setGateStep(null)
+    setApprovalCount((c) => c + 1)
+  }
 
   function getSourceTag(field: string) {
     return sourceTags.find((t) => t.field === field)
@@ -180,6 +220,9 @@ export function ApplicationForm() {
   function handleAutomate() {
     if (match && activeApplicationId) {
       clearDemoSteps()
+      processedCountRef.current = 0
+      setGateStep(null)
+      setApprovalCount(0)
       fetch(`/api/agents/${match.id}/run?application_id=${activeApplicationId}`, {
         method: 'POST',
       })
@@ -284,6 +327,17 @@ export function ApplicationForm() {
           {getSourceTag('notes') && <SourceTagBadge tag={getSourceTag('notes')!} />}
         </div>
       </fieldset>
+
+      {/* HITL approval gate — shows after each field fills during agent run */}
+      {gateStep && (
+        <div style={{ padding: '0 8px 8px' }}>
+          <ApprovalGate
+            step={gateStep}
+            onApprove={handleStepApprove}
+            onCorrect={handleStepCorrect}
+          />
+        </div>
+      )}
 
       <div style={{ padding: '8px 8px', display: 'flex', gap: 8 }}>
         <button className="legacy-btn legacy-btn-primary" onClick={handleSubmit}>

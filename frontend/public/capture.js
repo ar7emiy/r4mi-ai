@@ -107,6 +107,22 @@
     return parts.join(' > ')
   }
 
+  // ── Teach-me mode: screenshot capture ────────────────────────────────────────
+  async function captureScreenshot() {
+    if (!isTeachMode()) return null
+    if (typeof window.html2canvas !== 'function') return null
+    try {
+      var canvas = await Promise.race([
+        window.html2canvas(document.documentElement, { scale: 0.5, useCORS: true, logging: false }),
+        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')) }, 500) }),
+      ])
+      // Strip data: prefix — backend expects raw base64
+      return canvas.toDataURL('image/jpeg', 0.6).split(',')[1] || null
+    } catch (_) {
+      return null
+    }
+  }
+
   // ── POST to backend ──────────────────────────────────────────────────────────
   async function postEvent(eventData) {
     try {
@@ -123,6 +139,10 @@
 
   function buildBase(eventType, el) {
     const meta = getSessionMeta()
+    const teachMode = isTeachMode()
+    // Consume pending narration and clear it for the next event
+    const narration = _pendingNarration
+    if (teachMode) _pendingNarration = null
     return {
       session_id: meta.session_id,
       user_id: CONFIGURED_USER_ID,
@@ -132,10 +152,61 @@
       element_selector: getCssSelector(el),
       element_value: null,
       permit_type: meta.permit_type,
-      capture_mode: 'obs',
+      capture_mode: teachMode ? 'teach' : 'obs',
       element_context: getElementContext(el),
+      step_description: teachMode ? narration : null,
     }
   }
+
+  // ── Teach-me mode: voice narration ───────────────────────────────────────────
+  var _pendingNarration = null
+  var _recognition = null
+
+  function isTeachMode() {
+    return document.body.getAttribute('data-teach-mode') === 'true'
+  }
+
+  function startVoice() {
+    if (_recognition) return
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) return
+    _recognition = new SR()
+    _recognition.continuous = true
+    _recognition.interimResults = false
+    _recognition.lang = 'en-US'
+    _recognition.onresult = function (e) {
+      var last = e.results[e.results.length - 1]
+      if (last && last.isFinal) {
+        _pendingNarration = last[0].transcript.trim()
+      }
+    }
+    _recognition.onerror = function () {}
+    _recognition.onend = function () {
+      // Restart if teach mode still active (recognition stops on long pauses)
+      if (isTeachMode()) _recognition.start()
+    }
+    try { _recognition.start() } catch (_) {}
+  }
+
+  function stopVoice() {
+    if (!_recognition) return
+    try { _recognition.stop() } catch (_) {}
+    _recognition = null
+    _pendingNarration = null
+  }
+
+  // Watch for data-teach-mode attribute appearing / disappearing on body
+  var _teachObserver = new MutationObserver(function () {
+    if (isTeachMode()) {
+      startVoice()
+    } else {
+      stopVoice()
+    }
+  })
+  _teachObserver.observe(document.body, { attributes: true, attributeFilter: ['data-teach-mode'] })
+
+  // Start immediately if already in teach mode when capture.js loads
+  if (isTeachMode()) startVoice()
 
   // ── Debounce helper ──────────────────────────────────────────────────────────
   function debounce(fn, ms) {
@@ -155,7 +226,14 @@
       _lastScreen = screen
       const evt = buildBase('screen_switch', document.activeElement)
       evt.screen_name = screen
-      postEvent(evt)
+      if (isTeachMode()) {
+        captureScreenshot().then(function (b64) {
+          evt.screenshot_b64 = b64
+          postEvent(evt)
+        })
+      } else {
+        postEvent(evt)
+      }
     }
   }
 
@@ -177,7 +255,14 @@
 
     const evt = buildBase('click', el)
     evt.element_value = el.value || el.textContent.trim().slice(0, 100) || null
-    postEvent(evt)
+    if (isTeachMode()) {
+      captureScreenshot().then(function (b64) {
+        evt.screenshot_b64 = b64
+        postEvent(evt)
+      })
+    } else {
+      postEvent(evt)
+    }
   }, { capture: true, passive: true })
 
   // ── Input / change events ────────────────────────────────────────────────────
