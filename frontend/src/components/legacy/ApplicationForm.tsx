@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useR4miStore } from '../../store/r4mi.store'
 
-const DEMO_SESSION_ID = 'session_demo_live'
-
 interface SourceTag {
   field: string
   value: string

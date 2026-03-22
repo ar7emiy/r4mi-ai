@@ -80,7 +80,7 @@ export function ChatMessage({ msg, onAction }: Props) {
 
       {msg.type === 'replay' && !msg.data?._acted && (
         <ReplayPreview
-          steps={(msg.data?.action_sequence as Array<Record<string, unknown>> ?? []) as Parameters<typeof ReplayPreview>[0]['steps']}
+          steps={(msg.data?.action_sequence as unknown as Parameters<typeof ReplayPreview>[0]['steps']) ?? []}
           sessionId={msg.data?.session_id as string ?? ''}
           onConfirmed={() => onAction?.('replay-confirmed', msg.data ?? {})}
           onSkip={(sid) => onAction?.('publish', { ...msg.data, session_id: sid })}
@@ -119,9 +119,9 @@ export function ChatMessage({ msg, onAction }: Props) {
         </button>
       )}
 
-      {msg.data?._acted && (
+      {Boolean(msg.data?._acted) && (
         <div style={{ marginTop: 4, fontSize: 10, color: '#4a5568', fontStyle: 'italic' }}>
-          {msg.data._actedLabel as string || 'Done'}
+          {(msg.data?._actedLabel as string) || 'Done'}
         </div>
       )}
 

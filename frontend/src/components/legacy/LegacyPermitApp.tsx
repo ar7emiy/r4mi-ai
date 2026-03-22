@@ -33,7 +33,6 @@ export function LegacyPermitApp() {
   const navigateTo = useR4miStore((s) => s.navigateTo)
   const setNavigateTo = useR4miStore((s) => s.setNavigateTo)
   const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
-  const demoMode = useR4miStore((s) => s.demoMode)
   const setDemoMode = useR4miStore((s) => s.setDemoMode)
 
   // When the overlay requests navigation, switch the active tab and clear the request

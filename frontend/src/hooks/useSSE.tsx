@@ -12,7 +12,6 @@ export function SSEProvider({ children }: { children: ReactNode }) {
   const esRef = useRef<EventSource | null>(null)
   const {
     setOpportunitySessionId,
-    setPanelView,
     addPublishedAgent,
     appendDemoStep,
     setCurrentSpec,

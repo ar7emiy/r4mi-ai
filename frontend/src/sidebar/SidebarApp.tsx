@@ -18,7 +18,7 @@ const API_BASE =
   'http://localhost:8000'
 
 export function SidebarApp() {
-  const { messages, addMessage, updateMessage, clear } = useChatMessages()
+  const { messages, addMessage, updateMessage } = useChatMessages()
   const [isRecording, setIsRecording] = useState(false)
   const [showAgentverse, setShowAgentverse] = useState(false)
   const [activeApplicationId, setActiveApplicationId] = useState<string | null>(null)
