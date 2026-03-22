@@ -107,6 +107,13 @@
     return parts.join(' > ')
   }
 
+  // ── Capture feedback dispatcher ──────────────────────────────────────────────
+  function dispatchCaptureFeedback(detail) {
+    try {
+      window.dispatchEvent(new CustomEvent('r4mi:capture-live', { detail: detail }))
+    } catch (_) {}
+  }
+
   // ── Teach-me mode: screenshot capture ────────────────────────────────────────
   async function captureScreenshot() {
     if (!isTeachMode()) return null
@@ -178,6 +185,7 @@
       var last = e.results[e.results.length - 1]
       if (last && last.isFinal) {
         _pendingNarration = last[0].transcript.trim()
+        dispatchCaptureFeedback({ type: 'narration', text: _pendingNarration })
       }
     }
     _recognition.onerror = function () {}
@@ -229,6 +237,9 @@
       if (isTeachMode()) {
         captureScreenshot().then(function (b64) {
           evt.screenshot_b64 = b64
+          if (b64) {
+            dispatchCaptureFeedback({ type: 'screenshot', dataUrl: 'data:image/jpeg;base64,' + b64 })
+          }
           postEvent(evt)
         })
       } else {
@@ -256,8 +267,18 @@
     const evt = buildBase('click', el)
     evt.element_value = el.value || el.textContent.trim().slice(0, 100) || null
     if (isTeachMode()) {
+      var ctx = getElementContext(el)
+      dispatchCaptureFeedback({
+        type: 'action',
+        label: ctx ? ctx.label || el.tagName.toLowerCase() : el.tagName.toLowerCase(),
+        screen: getScreenName(),
+        role: ctx ? ctx.role : el.tagName.toLowerCase(),
+      })
       captureScreenshot().then(function (b64) {
         evt.screenshot_b64 = b64
+        if (b64) {
+          dispatchCaptureFeedback({ type: 'screenshot', dataUrl: 'data:image/jpeg;base64,' + b64 })
+        }
         postEvent(evt)
       })
     } else {

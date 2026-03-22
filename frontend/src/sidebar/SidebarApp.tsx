@@ -3,8 +3,15 @@ import { ChatMessage } from './components/ChatMessage'
 import { ChatInput } from './components/ChatInput'
 import { RecordButton } from './components/RecordButton'
 import { AgentverseDrawer } from './components/AgentverseDrawer'
+import { CaptureFeedback } from './components/CaptureFeedback'
 import { useChatMessages } from './hooks/useChatMessages'
 import { useSidebarSSE } from './hooks/useSidebarSSE'
+
+interface CaptureFeedbackState {
+  narration: string | null
+  lastAction: string | null
+  lastScreenshot: string | null
+}
 
 const API_BASE =
   new URLSearchParams(window.location.search).get('api') ||
@@ -15,6 +22,11 @@ export function SidebarApp() {
   const [isRecording, setIsRecording] = useState(false)
   const [showAgentverse, setShowAgentverse] = useState(false)
   const [activeApplicationId, setActiveApplicationId] = useState<string | null>(null)
+  const [captureFeedback, setCaptureFeedback] = useState<CaptureFeedbackState>({
+    narration: null,
+    lastAction: null,
+    lastScreenshot: null,
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const recordSessionRef = useRef<string | null>(null)
 
@@ -38,6 +50,14 @@ export function SidebarApp() {
       if (e.data.type === 'r4mi:source-confirmed') {
         const section = e.data.section as string
         addMessage('system', `Source confirmed: ${section || 'selected paragraph'}. Click "Confirm & continue" to apply.`)
+      }
+      if (e.data.type === 'r4mi:capture-live') {
+        const d = e.data.detail as { type: string; text?: string; label?: string; screen?: string; role?: string; dataUrl?: string }
+        setCaptureFeedback((prev) => ({
+          narration: d.type === 'narration' ? (d.text ?? prev.narration) : prev.narration,
+          lastAction: d.type === 'action' ? `${d.label || d.role} on ${d.screen}` : prev.lastAction,
+          lastScreenshot: d.type === 'screenshot' ? (d.dataUrl ?? prev.lastScreenshot) : prev.lastScreenshot,
+        }))
       }
     }
     window.addEventListener('message', handleMessage)
@@ -299,6 +319,14 @@ export function SidebarApp() {
         ))}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Live capture feedback — visible only during recording */}
+      <CaptureFeedback
+        isRecording={isRecording}
+        narration={captureFeedback.narration}
+        lastAction={captureFeedback.lastAction}
+        lastScreenshot={captureFeedback.lastScreenshot}
+      />
 
       {/* Input */}
       <ChatInput

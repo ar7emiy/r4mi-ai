@@ -9,9 +9,9 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: { mode: 'on', size: { width: 1280, height: 800 } },
     launchOptions: {
-      slowMo: process.env.PWSLOWMO ? parseInt(process.env.PWSLOWMO) : 0,
+      slowMo: process.env.PWSLOWMO ? parseInt(process.env.PWSLOWMO) : 800,
     },
   },
   reporter: [

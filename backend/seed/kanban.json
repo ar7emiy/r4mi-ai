@@ -1,39 +1,10 @@
 {
-  "updated_at": "2026-03-22T00:00:00Z",
+  "updated_at": "2026-03-22T12:00:00Z",
   "stories": [
-    {
-      "id": "US-08",
-      "title": "Run button + data-testid on AgentverseDrawer agent cards",
-      "epic": "Beat 7 — Agentverse",
-      "priority": "P0",
-      "status": "done",
-      "files_affected": [
-        "frontend/src/sidebar/components/AgentverseDrawer.tsx",
-        "frontend/src/sidebar/SidebarApp.tsx",
-        "frontend/public/r4mi-loader.js",
-        "frontend/src/components/legacy/LegacyPermitApp.tsx"
-      ],
-      "notes": "Fixes latent E2E failure — data-testid was missing from agent cards"
-    },
-    {
-      "id": "US-03",
-      "title": "AGENT_MATCH_FOUND card with Activate Agent / Fork & Customise CTAs",
-      "epic": "Beat 3/4 — Market-First Detection",
-      "priority": "P1",
-      "status": "done",
-      "files_affected": [
-        "frontend/src/sidebar/hooks/useSidebarSSE.ts",
-        "frontend/src/sidebar/hooks/useChatMessages.ts",
-        "frontend/src/sidebar/components/ChatMessage.tsx",
-        "frontend/src/sidebar/SidebarApp.tsx",
-        "frontend/public/r4mi-loader.js"
-      ],
-      "notes": "Differentiated from OPTIMIZATION_OPPORTUNITY — shows match score bar + two CTAs"
-    },
     {
       "id": "US-01",
       "title": "ReplayPreview component — step-by-step replay in sidebar chat",
-      "epic": "Beat 3 — Replay Preview",
+      "epic": "Sprint 1 — Replay Preview",
       "priority": "P1",
       "status": "done",
       "files_affected": [
@@ -47,7 +18,7 @@
     {
       "id": "US-02",
       "title": "Correction textarea sub-card embedded in ReplayPreview",
-      "epic": "Beat 3 — Replay Preview",
+      "epic": "Sprint 1 — Replay Preview",
       "priority": "P1",
       "status": "done",
       "files_affected": [
@@ -57,9 +28,22 @@
       "notes": "confirm-correction action calls POST /api/agents/build with correction text"
     },
     {
+      "id": "US-03",
+      "title": "AGENT_MATCH_FOUND card with Activate Agent / Fork & Customise CTAs",
+      "epic": "Sprint 1 — Market-First Detection",
+      "priority": "P1",
+      "status": "done",
+      "files_affected": [
+        "frontend/src/sidebar/hooks/useSidebarSSE.ts",
+        "frontend/src/sidebar/components/ChatMessage.tsx",
+        "frontend/src/sidebar/SidebarApp.tsx"
+      ],
+      "notes": "Match score bar + two CTAs; differentiated from OPTIMIZATION_OPPORTUNITY"
+    },
+    {
       "id": "US-04",
       "title": "Show Me postMessage bridge — host-page teach-me mode entry",
-      "epic": "Beat 4 — Correction",
+      "epic": "Sprint 1 — Teach-Me Flow",
       "priority": "P0",
       "status": "done",
       "files_affected": [
@@ -73,52 +57,114 @@
     {
       "id": "US-05",
       "title": "Recording banner on host page during teach-me mode",
-      "epic": "Beat 4 — Correction",
+      "epic": "Sprint 1 — Teach-Me Flow",
       "priority": "P0",
       "status": "done",
       "files_affected": [
         "frontend/src/components/legacy/LegacyPermitApp.tsx"
       ],
-      "notes": "data-testid=recording-banner; red bg; pulsing dot; pushes content down"
-    },
-    {
-      "id": "US-09",
-      "title": "/kanban route with live story status board",
-      "epic": "Developer Tooling",
-      "priority": "P2",
-      "status": "done",
-      "files_affected": [
-        "frontend/src/pages/KanbanPage.tsx",
-        "frontend/src/App.tsx",
-        "backend/routers/kanban.py",
-        "backend/main.py",
-        "backend/seed/kanban.json"
-      ],
-      "notes": "Reads kanban.json on each request; auto-refreshes every 30s; dark sidebar aesthetic"
+      "notes": "Superseded by US-10 (banner removed from host page; recording indicator in sidebar only)"
     },
     {
       "id": "US-06",
       "title": "Voice narration in capture.js (teach-me mode)",
-      "epic": "Beat 4 — Capture Enrichment",
+      "epic": "Sprint 1 — Capture Enrichment",
       "priority": "P2",
-      "status": "todo",
+      "status": "done",
       "files_affected": [
-        "frontend/public/capture.js",
-        "frontend/public/r4mi-loader.js"
+        "frontend/public/capture.js"
       ],
       "notes": "SpeechRecognition API; step_description populated; null if unavailable"
     },
     {
       "id": "US-07",
       "title": "Screenshots in teach-me mode via html2canvas",
-      "epic": "Beat 4 — Capture Enrichment",
+      "epic": "Sprint 1 — Capture Enrichment",
       "priority": "P2",
-      "status": "todo",
+      "status": "done",
       "files_affected": [
         "frontend/public/capture.js",
         "frontend/public/r4mi-loader.js"
       ],
       "notes": "JPEG 0.6 quality; lazy-injected html2canvas; 500ms failsafe timeout"
+    },
+    {
+      "id": "US-08",
+      "title": "Run button + data-testid on AgentverseDrawer agent cards",
+      "epic": "Sprint 1 — Agentverse",
+      "priority": "P0",
+      "status": "done",
+      "files_affected": [
+        "frontend/src/sidebar/components/AgentverseDrawer.tsx",
+        "frontend/src/sidebar/SidebarApp.tsx",
+        "frontend/public/r4mi-loader.js"
+      ],
+      "notes": "Fixes latent E2E failure — data-testid was missing from agent cards"
+    },
+    {
+      "id": "US-09",
+      "title": "/kanban route with live story status board",
+      "epic": "Sprint 1 — Developer Tooling",
+      "priority": "P2",
+      "status": "done",
+      "files_affected": [
+        "frontend/src/pages/KanbanPage.tsx",
+        "frontend/src/App.tsx",
+        "backend/routers/kanban.py",
+        "backend/seed/kanban.json"
+      ],
+      "notes": "Reads kanban.json on each request; auto-refreshes every 30s"
+    },
+    {
+      "id": "US-10",
+      "title": "Remove host-page automation elements — green Automate button + ApprovalGate",
+      "epic": "Sprint 2 — Host UI Cleanup",
+      "priority": "P0",
+      "status": "done",
+      "files_affected": [
+        "frontend/src/components/legacy/ApplicationForm.tsx",
+        "frontend/src/components/legacy/LegacyPermitApp.tsx",
+        "frontend/src/sidebar/components/ChatMessage.tsx",
+        "e2e/tests/demo.spec.ts"
+      ],
+      "notes": "All automation UI now exclusively in sidebar; fields fill without blocking gates; E2E updated for sidebar frame selectors"
+    },
+    {
+      "id": "US-11",
+      "title": "Live capture feedback panel in sidebar during recording",
+      "epic": "Sprint 2 — Teach-Me Feedback",
+      "priority": "P0",
+      "status": "done",
+      "files_affected": [
+        "frontend/public/capture.js",
+        "frontend/public/r4mi-loader.js",
+        "frontend/src/sidebar/SidebarApp.tsx",
+        "frontend/src/sidebar/components/CaptureFeedback.tsx"
+      ],
+      "notes": "Shows live voice transcript, last captured element, and screenshot thumbnail while recording"
+    },
+    {
+      "id": "US-12",
+      "title": "Suppress OPTIMIZATION_OPPORTUNITY when agent already published (dedup)",
+      "epic": "Sprint 2 — Deduplication",
+      "priority": "P1",
+      "status": "done",
+      "files_affected": [
+        "backend/services/pattern_detector.py"
+      ],
+      "notes": "Permit-type fallback added — vector similarity may diverge between trace and spec embeddings"
+    },
+    {
+      "id": "US-13",
+      "title": "Playwright always-on video recording (slowMo=800ms) + GitHub artifact upload",
+      "epic": "Sprint 2 — Recording",
+      "priority": "P2",
+      "status": "done",
+      "files_affected": [
+        "e2e/playwright.config.ts",
+        ".github/workflows/e2e-demo.yml"
+      ],
+      "notes": "video: on; slowMo: 800ms default; artifacts uploaded for 7 days on each CI run"
     }
   ]
 }

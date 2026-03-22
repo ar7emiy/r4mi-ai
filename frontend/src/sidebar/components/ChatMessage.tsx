@@ -11,8 +11,13 @@ export function ChatMessage({ msg, onAction }: Props) {
 
   const event = msg.data?.event as string | undefined
 
+  const isAgentStep = msg.type === 'agent-step'
+
   return (
-    <div style={{ ...baseMsg, ...style }}>
+    <div
+      style={{ ...baseMsg, ...style }}
+      data-testid={isAgentStep ? 'approval-gate' : undefined}
+    >
       {msg.type === 'error' && <span style={errorDot} />}
       {msg.type === 'notification' && <span style={notifDot} />}
 
@@ -102,6 +107,16 @@ export function ChatMessage({ msg, onAction }: Props) {
         <div style={{ marginTop: 6, fontSize: 11, color: '#22c55e' }}>
           Agent is now available in the Agentverse.
         </div>
+      )}
+
+      {isAgentStep && !msg.data?._acted && (
+        <button
+          data-testid="approval-gate-approve"
+          style={{ ...actionBtn, marginTop: 6 }}
+          onClick={() => onAction?.('approve-step', msg.data ?? {})}
+        >
+          Looks good — continue
+        </button>
       )}
 
       {msg.data?._acted && (

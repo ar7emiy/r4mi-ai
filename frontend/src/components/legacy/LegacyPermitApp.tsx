@@ -73,35 +73,6 @@ export function LegacyPermitApp() {
         position: 'relative',
       }}
     >
-      {/* Teach-me recording banner */}
-      {demoMode && (
-        <div
-          data-testid="recording-banner"
-          style={{
-            background: '#dc2626',
-            color: '#fff',
-            padding: '8px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            fontFamily: 'Arial, sans-serif',
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-        >
-          <span style={{
-            display: 'inline-block',
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: '#fff',
-            animation: 'pulse 1s ease-in-out infinite',
-          }} />
-          RECORDING WORKFLOW — click the authoritative source
-          <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
-        </div>
-      )}
-
       {/* Government nav bar */}
       <div
         style={{

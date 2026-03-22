@@ -137,7 +137,14 @@
     // SSE not available — badge just won't update
   }
 
-  // ── 6. postMessage bridge ─────────────────────────────────────────────────
+  // ── 6. Capture feedback relay ─────────────────────────────────────────────
+  window.addEventListener('r4mi:capture-live', function (e) {
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({ type: 'r4mi:capture-live', detail: e.detail }, '*')
+    }
+  })
+
+  // ── 7. postMessage bridge ─────────────────────────────────────────────────
   window.addEventListener('message', function (e) {
     if (!e.data || !e.data.type) return
     var msg = e.data

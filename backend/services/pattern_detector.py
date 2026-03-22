@@ -6,6 +6,7 @@ from typing import Optional
 from sqlmodel import Session, select
 
 from models.session import SessionRecord, PatternState
+from models.agent_spec import NarrowAgentSpec, TrustLevel
 from models.event import ActionTrace, UIEvent, SSEEventType
 from services.embedding_service import embedding_service
 from services.log_streamer import logger
@@ -95,9 +96,31 @@ class PatternDetector:
                 f"exceed similarity threshold"
             )
 
-            # Market-first: check for an existing published agent before building
+            # Market-first: check for an existing published agent before building.
+            # Try vector similarity first; fall back to permit_type match if no
+            # vector match (trace vs spec text embeddings may diverge).
             logger.info("[MarketMatcher] Checking published agents for existing match...")
             match_result = await market_matcher.find_match_by_vector(vector, db)
+            if not match_result:
+                # Fallback: any non-stale published agent for the same permit_type
+                existing = db.exec(
+                    select(NarrowAgentSpec).where(
+                        NarrowAgentSpec.permit_type == session.permit_type,
+                        NarrowAgentSpec.trust_level != TrustLevel.STALE,
+                    )
+                ).first()
+                if existing:
+                    score = (
+                        embedding_service.cosine_similarity(vector, existing.embedding)
+                        if existing.embedding
+                        else 0.0
+                    )
+                    match_result = (existing, score)
+                    logger.info(
+                        f"[MarketMatcher] Permit-type fallback match: "
+                        f"spec='{existing.name}' score={score}"
+                    )
+
             if match_result:
                 matched_spec, match_score = match_result
                 logger.info(
