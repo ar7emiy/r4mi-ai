@@ -29,10 +29,20 @@ jobs:
 
       - name: Start backend
         working-directory: backend
-        run: uvicorn main:app --host 0.0.0.0 --port 8000 &
+        run: |
+          uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
+          echo "Backend PID: $!"
         env:
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
           DEMO_SESSION_SEED: "true"
+
+      - name: Verify backend is starting
+        run: |
+          sleep 5
+          echo "=== Backend log (first 50 lines) ==="
+          head -50 /tmp/backend.log || echo "No log file found"
+          echo "=== Checking port 8000 ==="
+          curl -s http://localhost:8000/health || echo "Health endpoint not responding yet"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -79,3 +89,9 @@ jobs:
           name: playwright-report-${{ github.run_number }}
           path: e2e/playwright-report/
           retention-days: 7
+
+      - name: Dump backend logs on failure
+        if: failure()
+        run: |
+          echo "=== Full backend log ==="
+          cat /tmp/backend.log || echo "No backend log found"
