@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -235,9 +236,8 @@ async def lifespan(app: FastAPI):
     logger.info("[r4mi-ai] Database initialized")
 
     if os.getenv("DEMO_SESSION_SEED", "false").lower() == "true":
-        logger.info("[r4mi-ai] DEMO_SESSION_SEED=true — seeding prior sessions...")
-        await _seed_demo_sessions()
-        logger.info("[r4mi-ai] Demo sessions ready")
+        logger.info("[r4mi-ai] DEMO_SESSION_SEED=true — seeding in background (non-blocking)...")
+        asyncio.create_task(_seed_demo_sessions())
 
     logger.info("[r4mi-ai] Backend started — listening on :8000")
     yield
