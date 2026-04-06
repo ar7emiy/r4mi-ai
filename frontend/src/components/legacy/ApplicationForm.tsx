@@ -2,52 +2,10 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useR4miStore } from '../../store/r4mi.store'
 
-interface SourceTag {
-  field: string
-  value: string
-  source: string
-}
 
-const TYPING_DELAY_MS = 60
-
-// Per-permit-type field configuration
-const PERMIT_CONFIG: Record<string, {
-  constraintLabel: string
-  constraintPlaceholder: string
-  showFenceFields: boolean
-}> = {
-  fence_variance:  { constraintLabel: 'Max Permitted Height', constraintPlaceholder: 'ft',          showFenceFields: true  },
-  solar_permit:    { constraintLabel: 'Max System Size',       constraintPlaceholder: 'kW',          showFenceFields: false },
-  home_occupation: { constraintLabel: 'Allowed Use Finding',   constraintPlaceholder: 'Yes / No',    showFenceFields: false },
-  tree_removal:    { constraintLabel: 'Replacement Ratio',     constraintPlaceholder: '1:1 / waived',showFenceFields: false },
-  deck_permit:     { constraintLabel: 'Max Deck Height',       constraintPlaceholder: 'in',          showFenceFields: false },
-  adu_addition:    { constraintLabel: 'Max Unit Size',         constraintPlaceholder: 'sq ft',       showFenceFields: false },
-  commercial_signage: { constraintLabel: 'Max Sign Area',      constraintPlaceholder: 'sq ft',       showFenceFields: false },
-  demolition:      { constraintLabel: 'Clearance Required',    constraintPlaceholder: 'Yes / No',    showFenceFields: false },
-  str_registration:{ constraintLabel: 'Nights Per Year Limit', constraintPlaceholder: 'nights',      showFenceFields: false },
-}
-
-function getPermitConfig(permitType?: string) {
-  return PERMIT_CONFIG[permitType ?? ''] ?? {
-    constraintLabel: 'Max Permitted Value',
-    constraintPlaceholder: '',
-    showFenceFields: false,
-  }
-}
-
-async function typeValue(
-  value: string,
-  setter: (v: string) => void,
-): Promise<void> {
-  for (let i = 0; i <= value.length; i++) {
-    setter(value.slice(0, i))
-    await new Promise((r) => setTimeout(r, TYPING_DELAY_MS))
-  }
-}
 
 export function ApplicationForm() {
   const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
-  const demoSteps = useR4miStore((s) => s.demoSteps)
   const { data: app } = useQuery({
     queryKey: ['application', activeApplicationId],
     queryFn: () =>
@@ -61,9 +19,7 @@ export function ApplicationForm() {
   const [varianceRequired, setVarianceRequired] = useState('')
   const [decision, setDecision] = useState('')
   const [notes, setNotes] = useState('')
-  const [sourceTags, setSourceTags] = useState<SourceTag[]>([])
   const [submitted, setSubmitted] = useState(false)
-  const processedCountRef = { current: 0 }
 
   // Reset form state when switching to a different application
   useEffect(() => {
@@ -73,77 +29,11 @@ export function ApplicationForm() {
     setVarianceRequired('')
     setDecision('')
     setNotes('')
-    setSourceTags([])
     setSubmitted(false)
-    processedCountRef.current = 0
   }, [activeApplicationId])
 
-  // Listen for HITL replay steps from sidebar via r4mi-loader postMessage bridge
-  useEffect(() => {
-    function onReplayStep(e: Event) {
-      const detail = (e as CustomEvent).detail as { field: string; value: string; source_tag: string }
-      if (!detail) return
-      const field = detail.field?.toLowerCase() ?? ''
-      if (field.includes('zone')) {
-        typeValue(detail.value, setZone)
-        setSourceTags((prev) => [
-          ...prev.filter((t) => t.field !== 'zone'),
-          { field: 'zone', value: detail.value, source: detail.source_tag },
-        ])
-      } else if (field.includes('note') || field.includes('decision')) {
-        typeValue(detail.value, setNotes)
-        setSourceTags((prev) => [
-          ...prev.filter((t) => t.field !== 'notes'),
-          { field: 'notes', value: detail.value, source: detail.source_tag },
-        ])
-      } else if (field.includes('height') || field.includes('max')) {
-        typeValue(detail.value, setMaxHeight)
-        setSourceTags((prev) => [
-          ...prev.filter((t) => t.field !== 'max_height'),
-          { field: 'max_height', value: detail.value, source: detail.source_tag },
-        ])
-      }
-    }
-    window.addEventListener('r4mi:demo-step', onReplayStep)
-    return () => window.removeEventListener('r4mi:demo-step', onReplayStep)
-  }, [])
 
-  // Apply demo step auto-fill with typing animation, sequentially without blocking
-  useEffect(() => {
-    const pending = demoSteps.slice(processedCountRef.current)
-    if (pending.length === 0) return
 
-    async function applyAll() {
-      for (const step of pending) {
-        processedCountRef.current++
-        const field = step.field?.toLowerCase() ?? ''
-        if (field.includes('zone')) {
-          await typeValue(step.value, setZone)
-          setSourceTags((prev) => [
-            ...prev.filter((t) => t.field !== 'zone'),
-            { field: 'zone', value: step.value, source: step.source_tag },
-          ])
-        } else if (field.includes('note') || field.includes('decision')) {
-          await typeValue(step.value, setNotes)
-          setSourceTags((prev) => [
-            ...prev.filter((t) => t.field !== 'notes'),
-            { field: 'notes', value: step.value, source: step.source_tag },
-          ])
-        } else if (field.includes('height') || field.includes('max')) {
-          await typeValue(step.value, setMaxHeight)
-          setSourceTags((prev) => [
-            ...prev.filter((t) => t.field !== 'max_height'),
-            { field: 'max_height', value: step.value, source: step.source_tag },
-          ])
-        }
-      }
-    }
-    applyAll()
-  }, [demoSteps])
-
-  function getSourceTag(field: string) {
-    return sourceTags.find((t) => t.field === field)
-  }
 
   async function handleSubmit() {
     if (!activeApplicationId) return
@@ -238,8 +128,6 @@ export function ApplicationForm() {
           value={zone}
           onChange={setZone}
           required
-          sourceTag={getSourceTag('zone')}
-          testId="field-zone"
         />
         {permitCfg.showFenceFields && (
           <FormRow
@@ -255,8 +143,6 @@ export function ApplicationForm() {
           onChange={setMaxHeight}
           required
           placeholder={permitCfg.constraintPlaceholder}
-          sourceTag={getSourceTag('max_height')}
-          testId="field-max-height"
         />
         {permitCfg.showFenceFields && (
           <FormRow
@@ -290,7 +176,7 @@ export function ApplicationForm() {
             rows={4}
             style={{ width: '100%', marginTop: 2, resize: 'vertical' }}
           />
-          {getSourceTag('notes') && <SourceTagBadge tag={getSourceTag('notes')!} />}
+          
         </div>
       </fieldset>
 
@@ -313,8 +199,6 @@ function FormRow({
   required = false,
   placeholder = '',
   wide = false,
-  sourceTag,
-  testId,
 }: {
   label: string
   value: string
@@ -323,8 +207,6 @@ function FormRow({
   required?: boolean
   placeholder?: string
   wide?: boolean
-  sourceTag?: { field: string; value: string; source: string }
-  testId?: string
 }) {
   return (
     <div
@@ -361,7 +243,6 @@ function FormRow({
           />
         ) : (
           <input
-            data-testid={testId}
             className="legacy-input"
             value={value}
             readOnly={readOnly}
@@ -373,27 +254,12 @@ function FormRow({
             }}
           />
         )}
-        {sourceTag && <SourceTagBadge tag={sourceTag} />}
+        
       </div>
     </div>
   )
 }
 
-function SourceTagBadge({ tag }: { tag: { source: string } }) {
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        marginLeft: 6,
-        padding: '1px 6px',
-        background: '#1a1d27',
-        border: '1px solid #6366f1',
-        color: '#94a3b8',
-        fontSize: 10,
-        fontFamily: 'Inter, system-ui, sans-serif',
-        borderRadius: 2,
-        verticalAlign: 'middle',
-      }}
     >
       {tag.source}
     </span>

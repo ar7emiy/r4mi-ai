@@ -62,6 +62,39 @@ function mkLog(text: string, level: LogEntry['level'] = 'info'): LogEntry {
 // ── Component ─────────────────────────────────────────────────────────────────
 export function SidebarApp() {
   const [phase, setPhase] = useState<Phase>('idle')
+
+  const [isDark, setIsDark] = useState(true)
+  const [tab, setTab] = useState<'chat'|'activity'>('chat')
+  const [isRecordingPaused, setIsRecordingPaused] = useState(localStorage.getItem('r4mi_pause_recording') === 'true')
+
+  const toggleRecordingPause = () => {
+    const next = !isRecordingPaused
+    setIsRecordingPaused(next)
+    if (next) localStorage.setItem('r4mi_pause_recording', 'true')
+    else localStorage.removeItem('r4mi_pause_recording')
+  }
+
+  const CLR = isDark ? {
+    bg: '#09090b',
+    surface: '#18181b',
+    border: '#27272a',
+    text: '#f4f4f5',
+    dim: '#a1a1aa',
+    accent: '#FF7E67',
+    green: '#10b981',
+    amber: '#f59e0b',
+    red: '#ef4444',
+  } : {
+    bg: '#f8fafc',
+    surface: '#ffffff',
+    border: '#e2e8f0',
+    text: '#0f172a',
+    dim: '#64748b',
+    accent: '#FF7E67',
+    green: '#059669',
+    amber: '#d97706',
+    red: '#dc2626',
+  }
   const { messages, addMessage, updateMessage } = useChatMessages()
   const [detected, setDetected] = useState<DetectedData | null>(null)
   const [spec, setSpec] = useState<SpecData | null>(null)
@@ -314,17 +347,18 @@ export function SidebarApp() {
 
   return (
     <div style={root}>
+
       {/* Header */}
       <div style={header}>
         <span style={headerTitle}>r4mi</span>
         <span style={headerPhase}>
-          {phase === 'idle' && 'observing'}
-          {phase === 'recording' && '● recording'}
-          {phase === 'detected' && 'pattern found'}
-          {phase === 'replay' && 'replay'}
-          {phase === 'publishing' && 'published'}
+          {isRecordingPaused ? <span style={{color: CLR.red}}>■ Paused Mode</span> : <span style={{color: CLR.green}}>● Passive Mode</span>}
         </span>
         <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={toggleRecordingPause} style={{...headerBtn, color: isRecordingPaused ? CLR.red : CLR.green, borderColor: isRecordingPaused ? CLR.red : CLR.green}} title="Pause all recording">
+             {isRecordingPaused ? 'off' : 'on'}
+          </button>
+          <button onClick={() => setIsDark(!isDark)} style={headerBtn}>{isDark ? '☀️' : '🌙'}</button>
           <button onClick={() => setPhase('agents')} style={headerBtn}>agents</button>
           <button
             onClick={() => window.parent.postMessage({ type: 'r4mi:close' }, '*')}
@@ -332,6 +366,13 @@ export function SidebarApp() {
           >x</button>
         </div>
       </div>
+      
+      {/* Tabs */}
+      <div style={{display: 'flex', borderBottom: `1px solid ${CLR.border}`, background: CLR.surface}}>
+        <div onClick={() => setTab('chat')} style={{flex: 1, textAlign: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 11, fontWeight: tab === 'chat' ? 700 : 400, color: tab === 'chat' ? CLR.accent : CLR.dim, borderBottom: tab === 'chat' ? `2px solid ${CLR.accent}` : '2px solid transparent'}}>Chat</div>
+        <div onClick={() => setTab('activity')} style={{flex: 1, textAlign: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 11, fontWeight: tab === 'activity' ? 700 : 400, color: tab === 'activity' ? CLR.accent : CLR.dim, borderBottom: tab === 'activity' ? `2px solid ${CLR.accent}` : '2px solid transparent'}}>System View</div>
+      </div>
+
 
       {/* Main content area */}
       <div style={mainArea}>
@@ -340,7 +381,13 @@ export function SidebarApp() {
         {phase === 'idle' && (
           <div style={phaseContainer}>
             <div style={logArea}>
-              {messages.map((m) => (<ChatMessageComponent key={m.id} msg={m} />))}
+              
+              {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
+                <ChatMessageComponent key={m.id} msg={m} />
+              )) : messages.map((m) => (
+                <ChatMessageComponent key={m.id} msg={m} />
+              ))}
+
               <div ref={logsEndRef} />
             </div>
           </div>
@@ -374,7 +421,13 @@ export function SidebarApp() {
               </button>
             </div>
             <div style={{ ...logArea, marginTop: 16 }}>
-              {messages.map((m) => (<ChatMessageComponent key={m.id} msg={m} />))}
+              
+              {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
+                <ChatMessageComponent key={m.id} msg={m} />
+              )) : messages.map((m) => (
+                <ChatMessageComponent key={m.id} msg={m} />
+              ))}
+
               <div ref={logsEndRef} />
             </div>
           </div>
@@ -417,7 +470,13 @@ export function SidebarApp() {
               {isBuilding ? 'building...' : '▶ review replay'}
             </button>
             <div style={{ ...logArea, marginTop: 16 }}>
-              {messages.map((m) => (<ChatMessageComponent key={m.id} msg={m} />))}
+              
+              {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
+                <ChatMessageComponent key={m.id} msg={m} />
+              )) : messages.map((m) => (
+                <ChatMessageComponent key={m.id} msg={m} />
+              ))}
+
               <div ref={logsEndRef} />
             </div>
           </div>
@@ -459,7 +518,13 @@ export function SidebarApp() {
               </button>
             </div>
             <div style={{ ...logArea, marginTop: 16 }}>
-              {messages.map((m) => (<ChatMessageComponent key={m.id} msg={m} />))}
+              
+              {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
+                <ChatMessageComponent key={m.id} msg={m} />
+              )) : messages.map((m) => (
+                <ChatMessageComponent key={m.id} msg={m} />
+              ))}
+
               <div ref={logsEndRef} />
             </div>
           </div>
@@ -492,17 +557,7 @@ function LogLine({ entry }: { entry: LogEntry }) {
 // ── Styles ──────────────────────────────────────────────────────────────────
 const MONO = "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace"
 
-const CLR = {
-  bg: '#09090b',
-  surface: '#18181b',
-  border: '#27272a',
-  text: '#f4f4f5',
-  dim: '#a1a1aa',
-  accent: '#FF7E67',
-  green: '#10b981',
-  amber: '#f59e0b',
-  red: '#ef4444',
-}
+
 
 const root: React.CSSProperties = {
   display: 'flex',

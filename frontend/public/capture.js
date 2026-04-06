@@ -11,7 +11,7 @@
  * When active, sets window.__r4mi_capture_active = true so the React
  * application can skip its own manual observe POSTs.
  */
-;(function () {
+; (function () {
   'use strict'
 
   // ── Config ──────────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@
   function dispatchCaptureFeedback(detail) {
     try {
       window.dispatchEvent(new CustomEvent('r4mi:capture-live', { detail: detail }))
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // ── Teach-me mode: screenshot capture ────────────────────────────────────────
@@ -132,6 +132,7 @@
 
   // ── POST to backend ──────────────────────────────────────────────────────────
   async function postEvent(eventData) {
+    if (localStorage.getItem('r4mi_pause_recording') === 'true') return;
     try {
       await fetch(API_BASE + '/api/observe', {
         method: 'POST',
@@ -188,17 +189,17 @@
         dispatchCaptureFeedback({ type: 'narration', text: _pendingNarration })
       }
     }
-    _recognition.onerror = function () {}
+    _recognition.onerror = function () { }
     _recognition.onend = function () {
       // Restart if teach mode still active (recognition stops on long pauses)
       if (isTeachMode()) _recognition.start()
     }
-    try { _recognition.start() } catch (_) {}
+    try { _recognition.start() } catch (_) { }
   }
 
   function stopVoice() {
     if (!_recognition) return
-    try { _recognition.stop() } catch (_) {}
+    try { _recognition.stop() } catch (_) { }
     _recognition = null
     _pendingNarration = null
   }
@@ -314,11 +315,11 @@
     postEvent(evt)
   }, { capture: true, passive: true })
 
-  // ── Initial navigate event ────────────────────────────────────────────────────
-  ;(function sendInitialNavigate() {
-    const evt = buildBase('navigate', document.body)
-    evt.element_selector = 'document'
-    postEvent(evt)
-  })()
+    // ── Initial navigate event ────────────────────────────────────────────────────
+    ; (function sendInitialNavigate() {
+      const evt = buildBase('navigate', document.body)
+      evt.element_selector = 'document'
+      postEvent(evt)
+    })()
 
 })()
