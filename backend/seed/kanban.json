@@ -234,12 +234,22 @@
       "epic": "Sprint 4 — Sidebar Redesign",
       "priority": "P0",
       "status": "done",
-      "files_affected": [
-        "frontend/src/components/legacy/LegacyPermitApp.tsx",
-        "frontend/src/components/legacy/ApplicationForm.tsx",
-        "backend/main.py"
-      ],
-      "notes": "Tabs use display:none (not conditional render) so form state persists. Form fields reset on app switch. Demo startup clears stale agents + non-seeded sessions to prevent AGENT_MATCH_FOUND instead of OPTIMIZATION_OPPORTUNITY."
-    }
-  ]
+    ],
+    "notes": "Tabs use display:none (not conditional render) so form state persists. Form fields reset on app switch. Demo startup clears stale agents + non-seeded sessions to prevent AGENT_MATCH_FOUND instead of OPTIMIZATION_OPPORTUNITY."
+  },
+  {
+    "id": "US-20",
+    "title": "Modernize Sidebar UI and persistent contextual chat",
+    "epic": "Sprint 5 — Sidebar Chat & Bubble UI",
+    "priority": "P0",
+    "status": "done",
+    "files_affected": [
+      "frontend/public/r4mi-loader.js",
+      "frontend/src/sidebar/SidebarApp.tsx",
+      "frontend/src/sidebar/components/ChatInput.tsx",
+      "backend/routers/chat.py"
+    ],
+    "notes": "Added glassmorphism to sidebar, persistent chat area superseding phase-blocks, warm bubble UI with r4mi logo, guided autofill notifications, and /suggest-flow contextual chat endpoints."
+  }
+]
 }
