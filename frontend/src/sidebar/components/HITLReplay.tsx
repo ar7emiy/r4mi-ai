@@ -96,8 +96,7 @@ export function HITLReplay({ spec, sessionId, applicationId, onPublish, onCorrec
         setResolvedSteps(data.steps)
         setStepStatus(data.steps.map(() => 'pending'))
         setLoading(false)
-        // Auto-start the first step
-        setCurrentStep(0)
+        setCurrentStep(-1)
       } catch (e) {
         setError(`${e}`)
         setLoading(false)
@@ -250,16 +249,16 @@ export function HITLReplay({ spec, sessionId, applicationId, onPublish, onCorrec
           const isCurrent = i === currentStep && !allDone
           const statusIcon =
             status === 'approved' ? '✓' :
-            status === 'corrected' ? '~' :
-            status === 'navigating' ? '◎' :
-            status === 'filling' ? '◉' :
-            status === 'waiting' ? '▸' :
-            ' '
+              status === 'corrected' ? '~' :
+                status === 'navigating' ? '◎' :
+                  status === 'filling' ? '◉' :
+                    status === 'waiting' ? '▸' :
+                      ' '
           const statusColor =
             status === 'approved' ? CLR.green :
-            status === 'corrected' ? CLR.amber :
-            (status === 'navigating' || status === 'filling') ? CLR.accent :
-            isCurrent ? CLR.accent : CLR.dim
+              status === 'corrected' ? CLR.amber :
+                (status === 'navigating' || status === 'filling') ? CLR.accent :
+                  isCurrent ? CLR.accent : CLR.dim
 
           return (
             <div
@@ -302,7 +301,18 @@ export function HITLReplay({ spec, sessionId, applicationId, onPublish, onCorrec
       </div>
 
       {/* Active step detail */}
-      {activeStep && !allDone && (
+      {currentStep === -1 && !allDone && (
+        <div style={activePanel}>
+          <div style={sectionLabel}>── ready ──</div>
+          <div style={{ color: CLR.dim, fontSize: 11, marginBottom: 8 }}>
+            The agent is built and ready to replay the workflow. Ensure you have an appropriate, unsubmitted record open in the host application before beginning!
+          </div>
+          <button onClick={() => setCurrentStep(0)} style={btnPrimary}>
+            ▶ begin replay
+          </button>
+        </div>
+      )}
+      {activeStep && !allDone && currentStep >= 0 && (
         <div style={activePanel}>
           <div style={sectionLabel}>
             ── step {activeStep.step}/{resolvedSteps.length} ──

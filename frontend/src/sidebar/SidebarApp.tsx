@@ -198,8 +198,12 @@ export function SidebarApp() {
         log(`source confirmed: ${e.data.section || 'selected paragraph'}`, 'success')
       }
       if (e.data.type === 'r4mi:capture-live') {
-        const d = e.data.detail as { type: string; text?: string; label?: string; screen?: string; role?: string }
+        const d = e.data.detail as { type: string; text?: string; label?: string; screen?: string; role?: string, position?: { x: number, y: number } };
+        if (d.type === 'action' || d.type === 'narration' || d.type === 'screenshot') {
+          setCaptureLogs(prev => [...prev, { id: Date.now() + Math.random(), ts: Date.now(), ...d }]);
+        }
         setRecording((prev) => ({
+
           ...prev,
           feedback: {
             narration: d.type === 'narration' ? (d.text ?? prev.feedback.narration) : prev.feedback.narration,
@@ -376,166 +380,221 @@ export function SidebarApp() {
       </div>
 
 
+
       {/* Main content area */}
-      <div style={mainArea}>
+      {tab === 'activity' ? (
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8, background: CLR.bg }}>
+          <div style={{ fontSize: 13, fontWeight: 'bold', color: CLR.accent, marginBottom: 8, textTransform: 'uppercase' }}>── System Telemetry & Insights ──</div>
+          <div style={{ fontSize: 11, color: CLR.dim, marginBottom: 12 }}>Real-time streaming of LLM actions, DOM activity, and tracking.</div>
 
-        {/* ── IDLE ──────────────────────────────────────────── */}
-        {phase === 'idle' && (
-          <div style={phaseContainer}>
-            <div style={logArea}>
+          {captureLogs.length === 0 && <div style={{ color: CLR.dim, fontSize: 11 }}>No activity captured yet. Start recording to see telemetry.</div>}
 
-              {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
-                <ChatMessageComponent key={m.id} msg={m} />
-              )) : messages.map((m) => (
-                <ChatMessageComponent key={m.id} msg={m} />
-              ))}
-
-              <div ref={logsEndRef} />
-            </div>
-          </div>
-        )}
-
-        {/* ── RECORDING ─────────────────────────────────────── */}
-        {phase === 'recording' && (
-          <div style={phaseContainer}>
-            <div style={sectionLabel}>── teach mode ──</div>
-            <div style={{ padding: '8px 0' }}>
-              <div style={kvRow}>
-                <span style={kvKey}>voice:</span>
-                <span style={recording.feedback.narration ? kvVal : kvDim}>
-                  {recording.feedback.narration ?? 'listening...'}
-                </span>
-              </div>
-              <div style={kvRow}>
-                <span style={kvKey}>last:</span>
-                <span style={recording.feedback.lastAction ? kvVal : kvDim}>
-                  {recording.feedback.lastAction ?? '—'}
-                </span>
-              </div>
-              <div style={kvRow}>
-                <span style={kvKey}>steps:</span>
-                <span style={kvVal}>{recording.feedback.stepCount} captured</span>
+          {captureLogs.map((log, i) => (
+            <div key={log.id} style={{ padding: '8px 12px', background: CLR.surface, border: `1px solid ${CLR.border}`, borderRadius: 4, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <div style={{ color: CLR.dim, fontSize: 10, paddingTop: 2, minWidth: 60 }}>{new Date(log.ts).toISOString().split('T')[1].slice(0, 8)}</div>
+              <div style={{ flex: 1 }}>
+                {log.type === 'action' && (
+                  <>
+                    <span style={{ color: CLR.accent, fontWeight: 600, fontSize: 11 }}>[DOM_CLICK]</span>
+                    <span style={{ color: CLR.text, fontSize: 11, marginLeft: 6 }}>{log.role?.toUpperCase()} {log.label ? `"${log.label}"` : ''} on {log.screen}</span>
+                    {log.position && <div style={{ color: CLR.dim, fontSize: 10, marginTop: 4 }}>► pixel coordinates: x={log.position.x}, y={log.position.y}</div>}
+                  </>
+                )}
+                {log.type === 'narration' && (
+                  <>
+                    <span style={{ color: CLR.green, fontWeight: 600, fontSize: 11 }}>[VOICE_INPUT]</span>
+                    <span style={{ color: CLR.text, fontSize: 11, marginLeft: 6, fontStyle: 'italic' }}>"{log.text}"</span>
+                  </>
+                )}
+                {log.type === 'screenshot' && (
+                  <>
+                    <span style={{ color: CLR.amber, fontWeight: 600, fontSize: 11 }}>[SCREEN_CAPTURE]</span>
+                    <span style={{ color: CLR.dim, fontSize: 11, marginLeft: 6 }}>Snapshot saved to trace memory</span>
+                  </>
+                )}
               </div>
             </div>
-            <div style={{ marginTop: 12 }}>
-              <button onClick={stopRecording} style={btnDanger}>
-                ■ stop recording
-              </button>
-            </div>
-            <div style={{ ...logArea, marginTop: 16 }}>
-
-              {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
-                <ChatMessageComponent key={m.id} msg={m} />
-              )) : messages.map((m) => (
-                <ChatMessageComponent key={m.id} msg={m} />
-              ))}
-
-              <div ref={logsEndRef} />
-            </div>
-          </div>
-        )}
-
-        {/* ── DETECTED ──────────────────────────────────────── */}
-        {phase === 'detected' && detected && (
-          <div style={phaseContainer}>
-            <div style={sectionLabel}>── pattern detected ──</div>
-            <div style={{ padding: '8px 0' }}>
-              <div style={kvRow}>
-                <span style={kvKey}>permit_type:</span>
-                <span style={kvVal}>{detected.permit_type}</span>
+          ))}
+          {/* Also show system chat messages */}
+          {messages.filter(m => m.type === 'system' || m.type === 'spec').map((m, i) => (
+            <div key={m.id} style={{ padding: '8px 12px', background: CLR.bg, borderLeft: `2px solid ${CLR.accent}`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <div style={{ color: CLR.dim, fontSize: 10, paddingTop: 2, minWidth: 60 }}>{new Date(m.timestamp).toISOString().split('T')[1].slice(0, 8)}</div>
+              <div style={{ flex: 1 }}>
+                <span style={{ color: CLR.amber, fontWeight: 600, fontSize: 11 }}>[LLM_THOUGHT]</span>
+                <div style={{ color: CLR.text, fontSize: 11, marginTop: 4, whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{m.text}</div>
               </div>
-              <div style={kvRow}>
-                <span style={kvKey}>sessions:</span>
-                <span style={kvVal}>{detected.match_count} matched</span>
+            </div>
+          ))}
+          <div ref={logsEndRef} />
+        </div>
+      ) : (
+        <div style={mainArea}>
+
+
+          {/* ── IDLE ──────────────────────────────────────────── */}
+          {phase === 'idle' && (
+            <div style={phaseContainer}>
+              <div style={logArea}>
+
+                {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
+                  <ChatMessageComponent key={m.id} msg={m} />
+                )) : messages.map((m) => (
+                  <ChatMessageComponent key={m.id} msg={m} />
+                ))}
+
+                <div ref={logsEndRef} />
               </div>
-              {detected.scores?.map((s, i) => (
-                <div key={i} style={kvRow}>
-                  <span style={kvKey}>&gt;</span>
-                  <span style={kvVal}>
-                    {s.session} cos={s.score.toFixed(2)}{' '}
-                    <span style={{ color: s.score >= 0.85 ? CLR.green : CLR.dim }}>
-                      {s.score >= 0.85 ? '✓' : '✗'}
-                    </span>
+            </div>
+          )}
+
+          {/* ── RECORDING ─────────────────────────────────────── */}
+          {phase === 'recording' && (
+            <div style={phaseContainer}>
+              <div style={sectionLabel}>── teach mode ──</div>
+              <div style={{ padding: '8px 0' }}>
+                <div style={kvRow}>
+                  <span style={kvKey}>voice:</span>
+                  <span style={recording.feedback.narration ? kvVal : kvDim}>
+                    {recording.feedback.narration ?? 'listening...'}
                   </span>
                 </div>
-              ))}
-            </div>
-            <div style={{ ...kvVal, margin: '8px 0 12px', lineHeight: 1.5 }}>
-              r4mi can automate this workflow.{'\n'}
-              review the replay to approve each step.
-            </div>
-            <button
-              onClick={buildSpec}
-              disabled={isBuilding}
-              style={isBuilding ? { ...btnPrimary, opacity: 0.5 } : btnPrimary}
-            >
-              {isBuilding ? 'building...' : '▶ review replay'}
-            </button>
-            <div style={{ ...logArea, marginTop: 16 }}>
-
-              {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
-                <ChatMessageComponent key={m.id} msg={m} />
-              )) : messages.map((m) => (
-                <ChatMessageComponent key={m.id} msg={m} />
-              ))}
-
-              <div ref={logsEndRef} />
-            </div>
-          </div>
-        )}
-
-        {/* ── REPLAY (HITL) ─────────────────────────────────── */}
-        {phase === 'replay' && spec && detected && (
-          <HITLReplay
-            spec={spec}
-            sessionId={detected.session_id}
-            applicationId={activeAppId || 'PRM-2024-0041'}
-            onPublish={publishAgent}
-            onCorrection={rebuildSpec}
-            isPublishing={isPublishing}
-            isRebuilding={isBuilding}
-          />
-        )}
-
-        {/* ── PUBLISHED ─────────────────────────────────────── */}
-        {phase === 'publishing' && (
-          <div style={phaseContainer}>
-            <div style={sectionLabel}>── published ──</div>
-            <div style={{ padding: '12px 0' }}>
-              <div style={{ color: CLR.green, marginBottom: 8 }}>
-                ✓ agent &quot;{publishedName}&quot; is live in agentverse.
+                <div style={kvRow}>
+                  <span style={kvKey}>last:</span>
+                  <span style={recording.feedback.lastAction ? kvVal : kvDim}>
+                    {recording.feedback.lastAction ?? '—'}
+                  </span>
+                </div>
+                <div style={kvRow}>
+                  <span style={kvKey}>steps:</span>
+                  <span style={kvVal}>{recording.feedback.stepCount} captured</span>
+                </div>
               </div>
-              <div style={kvVal}>
-                run it from the agents panel or type{' '}
-                <span style={{ color: CLR.accent }}>/agent-name app-id</span>{' '}
-                in any chat.
+              <div style={{ marginTop: 12 }}>
+                <button onClick={stopRecording} style={btnDanger}>
+                  ■ stop recording
+                </button>
+              </div>
+              <div style={{ ...logArea, marginTop: 16 }}>
+
+                {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
+                  <ChatMessageComponent key={m.id} msg={m} />
+                )) : messages.map((m) => (
+                  <ChatMessageComponent key={m.id} msg={m} />
+                ))}
+
+                <div ref={logsEndRef} />
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button onClick={() => setPhase('agents')} style={btnPrimary}>
-                open agents
-              </button>
-              <button onClick={resetToIdle} style={btnGhost}>
-                back
-              </button>
-            </div>
-            <div style={{ ...logArea, marginTop: 16 }}>
+          )}
 
-              {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
-                <ChatMessageComponent key={m.id} msg={m} />
-              )) : messages.map((m) => (
-                <ChatMessageComponent key={m.id} msg={m} />
-              ))}
+          {/* ── DETECTED ──────────────────────────────────────── */}
+          {phase === 'detected' && detected && (
+            <div style={phaseContainer}>
+              <div style={sectionLabel}>── pattern detected ──</div>
+              <div style={{ padding: '8px 0' }}>
+                <div style={kvRow}>
+                  <span style={kvKey}>permit_type:</span>
+                  <span style={kvVal}>{detected.permit_type}</span>
+                </div>
+                <div style={kvRow}>
+                  <span style={kvKey}>sessions:</span>
+                  <span style={kvVal}>{detected.match_count} matched</span>
+                </div>
+                {detected.scores?.map((s, i) => (
+                  <div key={i} style={kvRow}>
+                    <span style={kvKey}>&gt;</span>
+                    <span style={kvVal}>
+                      {s.session} cos={s.score.toFixed(2)}{' '}
+                      <span style={{ color: s.score >= 0.85 ? CLR.green : CLR.dim }}>
+                        {s.score >= 0.85 ? '✓' : '✗'}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ ...kvVal, margin: '8px 0 12px', lineHeight: 1.5 }}>
+                r4mi can automate this workflow.{'\n'}
+                review the replay to approve each step.
+              </div>
+              <button
+                onClick={buildSpec}
+                disabled={isBuilding}
+                style={isBuilding ? { ...btnPrimary, opacity: 0.5 } : btnPrimary}
+              >
+                {isBuilding ? 'building...' : '▶ review replay'}
+              </button>
+              <div style={{ ...logArea, marginTop: 16 }}>
 
-              <div ref={logsEndRef} />
+                {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
+                  <ChatMessageComponent key={m.id} msg={m} />
+                )) : messages.map((m) => (
+                  <ChatMessageComponent key={m.id} msg={m} />
+                ))}
+
+                <div ref={logsEndRef} />
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+
+          {/* ── REPLAY (HITL) ─────────────────────────────────── */}
+          {phase === 'replay' && spec && detected && (
+            <HITLReplay
+              spec={spec}
+              sessionId={detected.session_id}
+              applicationId={activeAppId || 'PRM-2024-0041'}
+              onPublish={publishAgent}
+              onCorrection={rebuildSpec}
+              isPublishing={isPublishing}
+              isRebuilding={isBuilding}
+            />
+          )}
+
+          {/* ── PUBLISHED ─────────────────────────────────────── */}
+          {phase === 'publishing' && (
+            <div style={phaseContainer}>
+              <div style={sectionLabel}>── published ──</div>
+              <div style={{ padding: '12px 0' }}>
+                <div style={{ color: CLR.green, marginBottom: 8 }}>
+                  ✓ agent &quot;{publishedName}&quot; is live in agentverse.
+                </div>
+                <div style={kvVal}>
+                  run it from the agents panel or type{' '}
+                  <span style={{ color: CLR.accent }}>/agent-name app-id</span>{' '}
+                  in any chat.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button onClick={() => setPhase('agents')} style={btnPrimary}>
+                  open agents
+                </button>
+                <button onClick={resetToIdle} style={btnGhost}>
+                  back
+                </button>
+              </div>
+              <div style={{ ...logArea, marginTop: 16 }}>
+
+                {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
+                  <ChatMessageComponent key={m.id} msg={m} />
+                )) : messages.map((m) => (
+                  <ChatMessageComponent key={m.id} msg={m} />
+                ))}
+
+                <div ref={logsEndRef} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer — teach me + command input */}
-      <ChatInput addMessage={addMessage} isRecording={recording.active} setIsRecording={() => phase === 'recording' ? stopRecording() : startRecording()} onToggleAgentverse={() => setPhase('agents')} />
+      {tab === 'chat' && (
+        <ChatInput addMessage={addMessage} isRecording={recording.active} setIsRecording={() => phase === 'recording' ? stopRecording() : startRecording()} onToggleAgentverse={() => setPhase('agents')} />
+      )}
+      {tab === 'activity' && (
+        <div style={{ borderTop: `1px solid ${CLR.border}`, padding: 8, background: CLR.bg }}></div>
+      )}
     </div>
+
   )
 }
 
