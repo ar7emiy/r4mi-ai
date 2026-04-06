@@ -1,8 +1,30 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useR4miStore } from '../../store/r4mi.store'
+// Per-permit-type field configuration
+const PERMIT_CONFIG: Record<string, {
+  constraintLabel: string
+  constraintPlaceholder: string
+  showFenceFields: boolean
+}> = {
+  fence_variance: { constraintLabel: 'Max Permitted Height', constraintPlaceholder: 'ft', showFenceFields: true },
+  solar_permit: { constraintLabel: 'Max System Size', constraintPlaceholder: 'kW', showFenceFields: false },
+  home_occupation: { constraintLabel: 'Allowed Use Finding', constraintPlaceholder: 'Yes / No', showFenceFields: false },
+  tree_removal: { constraintLabel: 'Replacement Ratio', constraintPlaceholder: '1:1 / waived', showFenceFields: false },
+  deck_permit: { constraintLabel: 'Max Deck Height', constraintPlaceholder: 'in', showFenceFields: false },
+  adu_addition: { constraintLabel: 'Max Unit Size', constraintPlaceholder: 'sq ft', showFenceFields: false },
+  commercial_signage: { constraintLabel: 'Max Sign Area', constraintPlaceholder: 'sq ft', showFenceFields: false },
+  demolition: { constraintLabel: 'Clearance Required', constraintPlaceholder: 'Yes / No', showFenceFields: false },
+  str_registration: { constraintLabel: 'Nights Per Year Limit', constraintPlaceholder: 'nights', showFenceFields: false },
+}
 
-
+function getPermitConfig(permitType?: string) {
+  return PERMIT_CONFIG[permitType ?? ''] ?? {
+    constraintLabel: 'Max Permitted Value',
+    constraintPlaceholder: '',
+    showFenceFields: false,
+  }
+}
 
 export function ApplicationForm() {
   const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
@@ -176,7 +198,7 @@ export function ApplicationForm() {
             rows={4}
             style={{ width: '100%', marginTop: 2, resize: 'vertical' }}
           />
-          
+
         </div>
       </fieldset>
 
@@ -254,15 +276,9 @@ function FormRow({
             }}
           />
         )}
-        
+
       </div>
     </div>
-  )
-}
-
-    >
-      {tag.source}
-    </span>
   )
 }
 

@@ -49,22 +49,18 @@ interface CaptureFeedback {
   stepCount: number
 }
 
-// ── API ───────────────────────────────────────────────────────────────────────
+export const CLR = { bg: 'var(--clr-bg)', surface: 'var(--clr-surface)', border: 'var(--clr-border)', text: 'var(--clr-text)', dim: 'var(--clr-dim)', accent: 'var(--clr-accent)', green: 'var(--clr-green)', amber: 'var(--clr-amber)', red: 'var(--clr-red)' };
+// ── API ──
 const API_BASE =
   new URLSearchParams(window.location.search).get('api') ||
   'http://localhost:8000'
-
-let _logId = 0
-function mkLog(text: string, level: LogEntry['level'] = 'info'): LogEntry {
-  return { id: `log-${_logId++}`, text, ts: Date.now(), level }
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function SidebarApp() {
   const [phase, setPhase] = useState<Phase>('idle')
 
   const [isDark, setIsDark] = useState(true)
-  const [tab, setTab] = useState<'chat'|'activity'>('chat')
+  const [tab, setTab] = useState<'chat' | 'activity'>('chat')
   const [isRecordingPaused, setIsRecordingPaused] = useState(localStorage.getItem('r4mi_pause_recording') === 'true')
 
   const toggleRecordingPause = () => {
@@ -74,28 +70,34 @@ export function SidebarApp() {
     else localStorage.removeItem('r4mi_pause_recording')
   }
 
-  const CLR = isDark ? {
-    bg: '#09090b',
-    surface: '#18181b',
-    border: '#27272a',
-    text: '#f4f4f5',
-    dim: '#a1a1aa',
-    accent: '#FF7E67',
-    green: '#10b981',
-    amber: '#f59e0b',
-    red: '#ef4444',
-  } : {
-    bg: '#f8fafc',
-    surface: '#ffffff',
-    border: '#e2e8f0',
-    text: '#0f172a',
-    dim: '#64748b',
-    accent: '#FF7E67',
-    green: '#059669',
-    amber: '#d97706',
-    red: '#dc2626',
-  }
-  const { messages, addMessage, updateMessage } = useChatMessages()
+
+  useEffect(() => {
+    const clrs = isDark ? {
+      '--clr-bg': '#09090b',
+      '--clr-surface': '#18181b',
+      '--clr-border': '#27272a',
+      '--clr-text': '#f4f4f5',
+      '--clr-dim': '#a1a1aa',
+      '--clr-accent': '#FF7E67',
+      '--clr-green': '#10b981',
+      '--clr-amber': '#f59e0b',
+      '--clr-red': '#ef4444',
+    } : {
+      '--clr-bg': '#f8fafc',
+      '--clr-surface': '#ffffff',
+      '--clr-border': '#e2e8f0',
+      '--clr-text': '#0f172a',
+      '--clr-dim': '#64748b',
+      '--clr-accent': '#FF7E67',
+      '--clr-green': '#059669',
+      '--clr-amber': '#d97706',
+      '--clr-red': '#dc2626',
+    };
+    for (const [k, v] of Object.entries(clrs)) {
+      document.body.style.setProperty(k, v);
+    }
+  }, [isDark]);
+  const { messages, addMessage } = useChatMessages()
   const [detected, setDetected] = useState<DetectedData | null>(null)
   const [spec, setSpec] = useState<SpecData | null>(null)
   const [isBuilding, setIsBuilding] = useState(false)
@@ -180,7 +182,7 @@ export function SidebarApp() {
     function handleMessage(e: MessageEvent) {
       if (!e.data?.type) return
       if (e.data.type === 'r4mi:automation-alert') {
-        const sessionId = e.data.session_id
+
         addMessage('notification', 'Guided auto-fill is available.')
         addMessage('spec', 'Utility: Data entry automation\nGoals: Save time\nInput: Page context\nOutput: Filled forms', {})
         setTimeout(() => {
@@ -241,7 +243,7 @@ export function SidebarApp() {
           screen_name: 'TEACH_MODE_COMPLETE',
           element_selector: 'teach-stop-button',
         }),
-      }).catch(() => {})
+      }).catch(() => { })
     }
     setRecording((prev) => ({ ...prev, active: false }))
     window.parent.postMessage({ type: 'r4mi:set-session', sessionId: '' }, '*')
@@ -352,11 +354,11 @@ export function SidebarApp() {
       <div style={header}>
         <span style={headerTitle}>r4mi</span>
         <span style={headerPhase}>
-          {isRecordingPaused ? <span style={{color: CLR.red}}>■ Paused Mode</span> : <span style={{color: CLR.green}}>● Passive Mode</span>}
+          {isRecordingPaused ? <span style={{ color: CLR.red }}>■ Paused Mode</span> : <span style={{ color: CLR.green }}>● Passive Mode</span>}
         </span>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={toggleRecordingPause} style={{...headerBtn, color: isRecordingPaused ? CLR.red : CLR.green, borderColor: isRecordingPaused ? CLR.red : CLR.green}} title="Pause all recording">
-             {isRecordingPaused ? 'off' : 'on'}
+          <button onClick={toggleRecordingPause} style={{ ...headerBtn, color: isRecordingPaused ? CLR.red : CLR.green, borderColor: isRecordingPaused ? CLR.red : CLR.green }} title="Pause all recording">
+            {isRecordingPaused ? 'off' : 'on'}
           </button>
           <button onClick={() => setIsDark(!isDark)} style={headerBtn}>{isDark ? '☀️' : '🌙'}</button>
           <button onClick={() => setPhase('agents')} style={headerBtn}>agents</button>
@@ -366,11 +368,11 @@ export function SidebarApp() {
           >x</button>
         </div>
       </div>
-      
+
       {/* Tabs */}
-      <div style={{display: 'flex', borderBottom: `1px solid ${CLR.border}`, background: CLR.surface}}>
-        <div onClick={() => setTab('chat')} style={{flex: 1, textAlign: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 11, fontWeight: tab === 'chat' ? 700 : 400, color: tab === 'chat' ? CLR.accent : CLR.dim, borderBottom: tab === 'chat' ? `2px solid ${CLR.accent}` : '2px solid transparent'}}>Chat</div>
-        <div onClick={() => setTab('activity')} style={{flex: 1, textAlign: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 11, fontWeight: tab === 'activity' ? 700 : 400, color: tab === 'activity' ? CLR.accent : CLR.dim, borderBottom: tab === 'activity' ? `2px solid ${CLR.accent}` : '2px solid transparent'}}>System View</div>
+      <div style={{ display: 'flex', borderBottom: `1px solid ${CLR.border}`, background: CLR.surface }}>
+        <div onClick={() => setTab('chat')} style={{ flex: 1, textAlign: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 11, fontWeight: tab === 'chat' ? 700 : 400, color: tab === 'chat' ? CLR.accent : CLR.dim, borderBottom: tab === 'chat' ? `2px solid ${CLR.accent}` : '2px solid transparent' }}>Chat</div>
+        <div onClick={() => setTab('activity')} style={{ flex: 1, textAlign: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 11, fontWeight: tab === 'activity' ? 700 : 400, color: tab === 'activity' ? CLR.accent : CLR.dim, borderBottom: tab === 'activity' ? `2px solid ${CLR.accent}` : '2px solid transparent' }}>System View</div>
       </div>
 
 
@@ -381,7 +383,7 @@ export function SidebarApp() {
         {phase === 'idle' && (
           <div style={phaseContainer}>
             <div style={logArea}>
-              
+
               {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
                 <ChatMessageComponent key={m.id} msg={m} />
               )) : messages.map((m) => (
@@ -421,7 +423,7 @@ export function SidebarApp() {
               </button>
             </div>
             <div style={{ ...logArea, marginTop: 16 }}>
-              
+
               {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
                 <ChatMessageComponent key={m.id} msg={m} />
               )) : messages.map((m) => (
@@ -470,7 +472,7 @@ export function SidebarApp() {
               {isBuilding ? 'building...' : '▶ review replay'}
             </button>
             <div style={{ ...logArea, marginTop: 16 }}>
-              
+
               {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
                 <ChatMessageComponent key={m.id} msg={m} />
               )) : messages.map((m) => (
@@ -518,7 +520,7 @@ export function SidebarApp() {
               </button>
             </div>
             <div style={{ ...logArea, marginTop: 16 }}>
-              
+
               {tab === 'chat' ? messages.filter(m => m.type !== 'system' && m.type !== 'notification' && m.type !== 'error' && m.type !== 'agent-step').map((m) => (
                 <ChatMessageComponent key={m.id} msg={m} />
               )) : messages.map((m) => (
@@ -538,21 +540,6 @@ export function SidebarApp() {
 }
 
 // ── LogLine ─────────────────────────────────────────────────────────────────
-function LogLine({ entry }: { entry: LogEntry }) {
-  const color =
-    entry.level === 'success' ? CLR.green :
-    entry.level === 'warn' ? CLR.amber :
-    entry.level === 'error' ? CLR.red :
-    CLR.dim
-  const ts = new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  return (
-    <div style={{ fontSize: 11, lineHeight: 1.6, fontFamily: MONO }}>
-      <span style={{ color: CLR.dim }}>{ts}</span>{' '}
-      <span style={{ color }}>{'>'}</span>{' '}
-      <span style={{ color: CLR.text }}>{entry.text}</span>
-    </div>
-  )
-}
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 const MONO = "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace"
@@ -649,13 +636,6 @@ const logArea: React.CSSProperties = {
   paddingTop: 8,
 }
 
-const footer: React.CSSProperties = {
-  padding: '8px 12px',
-  borderTop: `1px solid ${CLR.border}`,
-  display: 'flex',
-  gap: 8,
-  flexShrink: 0,
-}
 
 const btnPrimary: React.CSSProperties = {
   background: CLR.accent,
