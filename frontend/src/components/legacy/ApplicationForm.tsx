@@ -65,6 +65,49 @@ export function ApplicationForm() {
   const [submitted, setSubmitted] = useState(false)
   const processedCountRef = { current: 0 }
 
+  // Reset form state when switching to a different application
+  useEffect(() => {
+    setZone('')
+    setMaxHeight('')
+    setFenceHeight('')
+    setVarianceRequired('')
+    setDecision('')
+    setNotes('')
+    setSourceTags([])
+    setSubmitted(false)
+    processedCountRef.current = 0
+  }, [activeApplicationId])
+
+  // Listen for HITL replay steps from sidebar via r4mi-loader postMessage bridge
+  useEffect(() => {
+    function onReplayStep(e: Event) {
+      const detail = (e as CustomEvent).detail as { field: string; value: string; source_tag: string }
+      if (!detail) return
+      const field = detail.field?.toLowerCase() ?? ''
+      if (field.includes('zone')) {
+        typeValue(detail.value, setZone)
+        setSourceTags((prev) => [
+          ...prev.filter((t) => t.field !== 'zone'),
+          { field: 'zone', value: detail.value, source: detail.source_tag },
+        ])
+      } else if (field.includes('note') || field.includes('decision')) {
+        typeValue(detail.value, setNotes)
+        setSourceTags((prev) => [
+          ...prev.filter((t) => t.field !== 'notes'),
+          { field: 'notes', value: detail.value, source: detail.source_tag },
+        ])
+      } else if (field.includes('height') || field.includes('max')) {
+        typeValue(detail.value, setMaxHeight)
+        setSourceTags((prev) => [
+          ...prev.filter((t) => t.field !== 'max_height'),
+          { field: 'max_height', value: detail.value, source: detail.source_tag },
+        ])
+      }
+    }
+    window.addEventListener('r4mi:demo-step', onReplayStep)
+    return () => window.removeEventListener('r4mi:demo-step', onReplayStep)
+  }, [])
+
   // Apply demo step auto-fill with typing animation, sequentially without blocking
   useEffect(() => {
     const pending = demoSteps.slice(processedCountRef.current)

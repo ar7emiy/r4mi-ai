@@ -22,7 +22,6 @@ interface Props {
 
 export function AgentverseDrawer({ onClose, activeApplicationId, onRun }: Props) {
   const [agents, setAgents] = useState<Agent[]>([])
-  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -35,67 +34,52 @@ export function AgentverseDrawer({ onClose, activeApplicationId, onRun }: Props)
       .catch(() => setLoading(false))
   }, [])
 
-  const filtered = agents.filter(
-    (a) =>
-      a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.permit_type.toLowerCase().includes(search.toLowerCase()),
-  )
-
   return (
-    <div style={container}>
+    <div style={root}>
+      {/* Header */}
       <div style={header}>
-        <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 13 }}>Agentverse</div>
-        <button onClick={onClose} style={closeBtn}>x</button>
+        <span style={headerTitle}>r4mi</span>
+        <span style={headerPhase}>agents</span>
+        <button onClick={onClose} style={headerBtn}>back</button>
       </div>
 
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search agents..."
-        style={searchInput}
-      />
+      <div style={mainArea}>
+        <div style={sectionLabel}>── published agents ──</div>
 
-      <div style={list}>
-        {loading && <div style={{ color: '#4a5568', fontSize: 12, padding: 12 }}>Loading...</div>}
-        {!loading && filtered.length === 0 && (
-          <div style={{ color: '#4a5568', fontSize: 12, padding: 12 }}>No agents found.</div>
+        {loading && <div style={{ color: CLR.dim, fontSize: 11, padding: '8px 0' }}>loading...</div>}
+
+        {!loading && agents.length === 0 && (
+          <div style={{ color: CLR.dim, fontSize: 11, padding: '8px 0' }}>
+            no agents published yet. detect a pattern or use teach-me to create one.
+          </div>
         )}
-        {filtered.map((a) => {
+
+        {agents.map((a) => {
           const isStale = a.trust_level === 'stale'
-          const trustColor = a.trust_level === 'autonomous' ? '#22c55e' : isStale ? '#94a3b8' : '#f59e0b'
+          const trustColor =
+            a.trust_level === 'autonomous' ? CLR.green :
+            isStale ? CLR.dim :
+            CLR.amber
           return (
             <div key={a.id} data-testid="agent-card" style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <div style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 12 }}>{a.name}</div>
-                <span style={{ ...trustBadge, color: trustColor, borderColor: trustColor, background: `${trustColor}15` }}>
-                  {a.trust_level.toUpperCase()}
+                <span style={{ color: CLR.text, fontWeight: 600, fontSize: 11 }}>{a.name}</span>
+                <span style={{ color: trustColor, fontSize: 9, fontWeight: 700, letterSpacing: '0.05em' }}>
+                  {a.trust_level}
                 </span>
               </div>
-              <div style={{ color: '#64748b', fontSize: 11, marginBottom: 6 }}>{a.description}</div>
+              <div style={{ color: CLR.dim, fontSize: 10, marginBottom: 6 }}>{a.description}</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ color: '#4a5568', fontSize: 10 }}>
+                <span style={{ color: CLR.dim, fontSize: 10 }}>
                   {a.successful_runs} runs | {a.permit_type}
-                </div>
-                {isStale ? (
-                  <span style={{ color: '#4a5568', fontSize: 10, fontStyle: 'italic' }}>Stale</span>
-                ) : (
+                </span>
+                {!isStale && (
                   <button
                     onClick={() => onRun(a.id, a.name)}
                     disabled={!activeApplicationId}
-                    style={{
-                      background: activeApplicationId ? '#6366f1' : '#2d3149',
-                      border: 'none',
-                      color: activeApplicationId ? '#fff' : '#4a5568',
-                      padding: '3px 10px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      borderRadius: 3,
-                      cursor: activeApplicationId ? 'pointer' : 'not-allowed',
-                      fontFamily: 'Inter, system-ui, sans-serif',
-                    }}
+                    style={activeApplicationId ? btnRun : { ...btnRun, opacity: 0.3, cursor: 'not-allowed' }}
                   >
-                    Run
+                    run
                   </button>
                 )}
               </div>
@@ -107,59 +91,92 @@ export function AgentverseDrawer({ onClose, activeApplicationId, onRun }: Props)
   )
 }
 
-const container: React.CSSProperties = {
+// ── Styles ──────────────────────────────────────────────────────────────────
+const MONO = "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace"
+
+const CLR = {
+  bg: '#0a0c10',
+  surface: '#12141a',
+  border: '#1e2030',
+  text: '#c9d1d9',
+  dim: '#484f58',
+  accent: '#7c6bf5',
+  green: '#3fb950',
+  amber: '#d29922',
+}
+
+const root: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  height: '100%',
-  background: '#0f1117',
+  height: '100vh',
+  background: CLR.bg,
+  fontFamily: MONO,
+  color: CLR.text,
+  fontSize: 12,
 }
 
 const header: React.CSSProperties = {
   display: 'flex',
-  justifyContent: 'space-between',
   alignItems: 'center',
-  padding: '10px 12px',
-  borderBottom: '1px solid #2d3149',
+  gap: 8,
+  padding: '8px 12px',
+  borderBottom: `1px solid ${CLR.border}`,
+  flexShrink: 0,
 }
 
-const closeBtn: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: '#4a5568',
+const headerTitle: React.CSSProperties = {
+  color: CLR.accent,
+  fontWeight: 700,
+  fontSize: 13,
+}
+
+const headerPhase: React.CSSProperties = {
+  color: CLR.dim,
+  fontSize: 11,
+  flex: 1,
+}
+
+const headerBtn: React.CSSProperties = {
+  background: 'transparent',
+  border: `1px solid ${CLR.border}`,
+  color: CLR.dim,
+  padding: '3px 8px',
   cursor: 'pointer',
-  fontSize: 14,
+  fontSize: 11,
+  fontFamily: MONO,
+  borderRadius: 2,
 }
 
-const searchInput: React.CSSProperties = {
-  margin: '8px 12px',
-  padding: '7px 10px',
-  background: '#1a1d27',
-  border: '1px solid #2d3149',
-  borderRadius: 4,
-  color: '#e2e8f0',
-  fontSize: 12,
-  outline: 'none',
-  fontFamily: 'Inter, system-ui, sans-serif',
-}
-
-const list: React.CSSProperties = {
+const mainArea: React.CSSProperties = {
   flex: 1,
   overflowY: 'auto',
-  padding: '0 12px',
+  padding: '8px 12px',
+}
+
+const sectionLabel: React.CSSProperties = {
+  color: CLR.accent,
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: '0.05em',
+  marginBottom: 8,
 }
 
 const card: React.CSSProperties = {
-  background: '#1a1d27',
-  border: '1px solid #2d3149',
-  borderRadius: 6,
-  padding: '10px 12px',
+  background: CLR.surface,
+  border: `1px solid ${CLR.border}`,
+  borderRadius: 3,
+  padding: '8px 10px',
   marginBottom: 6,
 }
 
-const trustBadge: React.CSSProperties = {
-  fontSize: 9,
-  fontWeight: 800,
-  padding: '1px 6px',
-  borderRadius: 10,
-  border: '1px solid',
+const btnRun: React.CSSProperties = {
+  background: CLR.accent,
+  border: 'none',
+  color: '#fff',
+  padding: '3px 10px',
+  cursor: 'pointer',
+  fontSize: 10,
+  fontWeight: 600,
+  fontFamily: MONO,
+  borderRadius: 2,
 }

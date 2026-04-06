@@ -1,288 +1,313 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { ChatMessage } from './components/ChatMessage'
-import { ChatInput } from './components/ChatInput'
-import { RecordButton } from './components/RecordButton'
 import { AgentverseDrawer } from './components/AgentverseDrawer'
-import { CaptureFeedback } from './components/CaptureFeedback'
+import { HITLReplay } from './components/HITLReplay'
+import { ChatInput } from './components/ChatInput'
+import { ChatMessage as ChatMessageComponent } from './components/ChatMessage'
 import { useChatMessages } from './hooks/useChatMessages'
-import { useSidebarSSE } from './hooks/useSidebarSSE'
 
-interface CaptureFeedbackState {
-  narration: string | null
-  lastAction: string | null
-  lastScreenshot: string | null
+// ── Types ─────────────────────────────────────────────────────────────────────
+type Phase = 'idle' | 'recording' | 'detected' | 'replay' | 'publishing' | 'agents'
+
+interface LogEntry {
+  id: string
+  text: string
+  ts: number
+  level: 'info' | 'success' | 'warn' | 'error'
 }
 
+interface DetectedData {
+  session_id: string
+  permit_type: string
+  match_count: number
+  scores?: Array<{ session: string; score: number }>
+}
+
+interface SpecData {
+  id?: string
+  name: string
+  description: string
+  permit_type: string
+  action_sequence: Array<{
+    step: number
+    action: string
+    description: string
+    field: string
+    value?: string
+    source: string
+  }>
+  knowledge_sources: Array<{
+    type: string
+    name: string
+    reference: string
+    confidence: number
+  }>
+}
+
+interface CaptureFeedback {
+  narration: string | null
+  lastAction: string | null
+  stepCount: number
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
 const API_BASE =
   new URLSearchParams(window.location.search).get('api') ||
   'http://localhost:8000'
 
+let _logId = 0
+function mkLog(text: string, level: LogEntry['level'] = 'info'): LogEntry {
+  return { id: `log-${_logId++}`, text, ts: Date.now(), level }
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export function SidebarApp() {
+  const [phase, setPhase] = useState<Phase>('idle')
   const { messages, addMessage, updateMessage } = useChatMessages()
-  const [isRecording, setIsRecording] = useState(false)
-  const [showAgentverse, setShowAgentverse] = useState(false)
-  const [activeApplicationId, setActiveApplicationId] = useState<string | null>(null)
-  const [captureFeedback, setCaptureFeedback] = useState<CaptureFeedbackState>({
-    narration: null,
-    lastAction: null,
-    lastScreenshot: null,
+  const [detected, setDetected] = useState<DetectedData | null>(null)
+  const [spec, setSpec] = useState<SpecData | null>(null)
+  const [isBuilding, setIsBuilding] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [publishedName, setPublishedName] = useState<string | null>(null)
+  const [activeAppId, setActiveAppId] = useState<string | null>(null)
+  const [recording, setRecording] = useState({
+    active: false,
+    sessionId: null as string | null,
+    feedback: { narration: null, lastAction: null, stepCount: 0 } as CaptureFeedback,
   })
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const recordSessionRef = useRef<string | null>(null)
 
-  // Wire SSE → chat messages
-  useSidebarSSE(addMessage)
+  const logsEndRef = useRef<HTMLDivElement>(null)
+  const phaseRef = useRef(phase)
+  phaseRef.current = phase
 
-  // Auto-scroll on new messages
+  const log = useCallback((text: string, level: LogEntry['level'] = 'info') => {
+    const type = level === 'success' ? 'system' : level === 'error' ? 'error' : 'system'
+    addMessage(type, text)
+  }, [addMessage])
+
+  // Auto-scroll logs
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Listen for postMessage from parent (loader)
+  // ── SSE ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    let es: EventSource | null = null
+
+    function connect() {
+      es = new EventSource(`${API_BASE}/api/sse`)
+      es.onmessage = (e) => {
+        try {
+          const raw = JSON.parse(e.data)
+          const event = raw.event as string
+          const payload = (raw.data ?? raw) as Record<string, unknown>
+
+          if (event === 'OPTIMIZATION_OPPORTUNITY') {
+            const d: DetectedData = {
+              session_id: payload.session_id as string,
+              permit_type: payload.permit_type as string ?? 'unknown',
+              match_count: payload.match_count as number ?? 3,
+              scores: payload.scores as DetectedData['scores'],
+            }
+            setDetected(d)
+            if (phaseRef.current === 'idle') {
+              setPhase('detected')
+            }
+            log(`pattern detected: ${d.permit_type} (${d.match_count} matches)`, 'success')
+          }
+
+          if (event === 'AGENT_DEMO_STEP') {
+            // Handled by HITLReplay via its own SSE or postMessage
+          }
+
+          if (event === 'AGENT_PUBLISHED') {
+            log(`agent published: ${payload.name}`, 'success')
+          }
+
+          if (event === 'AGENT_RUN_COMPLETE') {
+            log(`run complete. ${payload.fields_processed ?? 0} fields filled.`, 'success')
+          }
+
+          if (event === 'AGENT_EXCEPTION') {
+            log(`error: ${payload.reason ?? 'unknown'}`, 'error')
+          }
+        } catch { /* ignore */ }
+      }
+      es.onerror = () => {
+        es?.close()
+        setTimeout(connect, 3000)
+      }
+    }
+
+    connect()
+    return () => { es?.close() }
+  }, [log])
+
+  // ── PostMessage from parent (loader) ─────────────────────────────────────
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
       if (!e.data?.type) return
+      if (e.data.type === 'r4mi:automation-alert') {
+        const sessionId = e.data.session_id
+        addMessage('notification', 'Guided auto-fill is available.')
+        addMessage('spec', 'Utility: Data entry automation\nGoals: Save time\nInput: Page context\nOutput: Filled forms', {})
+        setTimeout(() => {
+          addMessage('system', 'Next: show each step? Do you have questions?')
+        }, 500)
+      }
       if (e.data.type === 'r4mi:opened') {
         if (e.data.activeApplicationId) {
-          setActiveApplicationId(e.data.activeApplicationId)
+          setActiveAppId(e.data.activeApplicationId)
         }
       }
       if (e.data.type === 'r4mi:source-confirmed') {
-        const section = e.data.section as string
-        addMessage('system', `Source confirmed: ${section || 'selected paragraph'}. Click "Confirm & continue" to apply.`)
+        log(`source confirmed: ${e.data.section || 'selected paragraph'}`, 'success')
       }
       if (e.data.type === 'r4mi:capture-live') {
-        const d = e.data.detail as { type: string; text?: string; label?: string; screen?: string; role?: string; dataUrl?: string }
-        setCaptureFeedback((prev) => ({
-          narration: d.type === 'narration' ? (d.text ?? prev.narration) : prev.narration,
-          lastAction: d.type === 'action' ? `${d.label || d.role} on ${d.screen}` : prev.lastAction,
-          lastScreenshot: d.type === 'screenshot' ? (d.dataUrl ?? prev.lastScreenshot) : prev.lastScreenshot,
+        const d = e.data.detail as { type: string; text?: string; label?: string; screen?: string; role?: string }
+        setRecording((prev) => ({
+          ...prev,
+          feedback: {
+            narration: d.type === 'narration' ? (d.text ?? prev.feedback.narration) : prev.feedback.narration,
+            lastAction: d.type === 'action' ? `${d.label || d.role} on ${d.screen}` : prev.feedback.lastAction,
+            stepCount: d.type === 'action' ? prev.feedback.stepCount + 1 : prev.feedback.stepCount,
+          },
         }))
       }
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [])
+  }, [log])
 
-  // ── Actions from chat message buttons ──────────────────────────────────
-  const activeApplicationIdRef = useRef<string | null>(null)
-  activeApplicationIdRef.current = activeApplicationId
+  // ── Actions ──────────────────────────────────────────────────────────────
+  function startRecording() {
+    const sessionId = `teach-${Date.now()}`
+    setRecording({
+      active: true,
+      sessionId,
+      feedback: { narration: null, lastAction: null, stepCount: 0 },
+    })
+    setPhase('recording')
+    window.parent.postMessage(
+      { type: 'r4mi:set-session', sessionId, permitType: '' },
+      '*',
+    )
+    log('recording started. work through the workflow.')
+  }
 
-  const handleAction = useCallback(
-    async (action: string, data: Record<string, unknown>) => {
-      if (action === 'activate-agent') {
-        const specId = data.id as string
-        const specName = data.name as string
-        if (!specId) return
-        const sourceMsg = messages.find((m) => m.data?.id === specId && m.data?.event === 'AGENT_MATCH_FOUND')
-        if (sourceMsg) {
-          updateMessage(sourceMsg.id, { data: { _acted: true, _actedLabel: 'Activating...' } })
-        }
-        window.parent.postMessage(
-          { type: 'r4mi:run-agent', specId, applicationId: activeApplicationIdRef.current },
-          '*',
-        )
-        addMessage('system', `Running ${specName} on ${activeApplicationIdRef.current || 'current application'}...`)
-        return
+  function stopRecording() {
+    const sessionId = recording.sessionId
+    if (sessionId) {
+      fetch(`${API_BASE}/api/observe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          user_id: 'permit-tech-001',
+          timestamp: new Date().toISOString(),
+          event_type: 'submit',
+          screen_name: 'TEACH_MODE_COMPLETE',
+          element_selector: 'teach-stop-button',
+        }),
+      }).catch(() => {})
+    }
+    setRecording((prev) => ({ ...prev, active: false }))
+    window.parent.postMessage({ type: 'r4mi:set-session', sessionId: '' }, '*')
+    log('recording stopped. processing...')
+    // Will transition to 'detected' when SSE fires OPTIMIZATION_OPPORTUNITY
+    setPhase('idle')
+  }
+
+  async function buildSpec() {
+    if (!detected) return
+    setIsBuilding(true)
+    log('building agent spec from pattern...')
+    try {
+      const res = await fetch(`${API_BASE}/api/agents/build`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: detected.session_id }),
+      })
+      const result = await res.json()
+      if (result.spec) {
+        setSpec(result.spec as SpecData)
+        setPhase('replay')
+        log(`spec ready: ${result.spec.name}`, 'success')
+      } else {
+        log('spec build failed', 'error')
       }
-
-      if (action === 'fork-agent') {
-        const specId = data.id as string
-        const sourceMsg = messages.find((m) => m.data?.id === specId && m.data?.event === 'AGENT_MATCH_FOUND')
-        if (sourceMsg) {
-          updateMessage(sourceMsg.id, { data: { _acted: true, _actedLabel: 'Forking...' } })
-        }
-        addMessage('system', 'Starting fork — building customised spec...')
-        try {
-          const res = await fetch(`${API_BASE}/api/agents/${specId}/tune`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          })
-          const result = await res.json()
-          if (result.spec) {
-            addMessage('spec', `Forked spec ready: ${result.spec.name}`, {
-              event: 'SPEC_GENERATED',
-              spec: result.spec,
-              session_id: result.spec.id,
-            })
-          }
-        } catch (e) {
-          addMessage('error', `Fork failed: ${e}`)
-        }
-        return
-      }
-
-      if (action === 'dismiss-match') {
-        const specId = data.id as string
-        const sourceMsg = messages.find((m) => m.data?.id === specId && m.data?.event === 'AGENT_MATCH_FOUND')
-        if (sourceMsg) {
-          updateMessage(sourceMsg.id, { data: { _acted: true, _actedLabel: 'Dismissed' } })
-        }
-        return
-      }
-
-      if (action === 'build-spec') {
-        const sessionId = data.session_id as string
-        if (!sessionId) return
-        // Mark the notification as acted
-        const sourceMsg = messages.find(
-          (m) => m.data?.session_id === sessionId && m.data?.event === 'OPTIMIZATION_OPPORTUNITY',
-        )
-        if (sourceMsg) {
-          updateMessage(sourceMsg.id, { data: { _acted: true, _actedLabel: 'Building spec...' } })
-        }
-
-        addMessage('system', 'Building agent spec from detected pattern...')
-
-        try {
-          const res = await fetch(`${API_BASE}/api/agents/build`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId }),
-          })
-          const result = await res.json()
-          if (result.spec) {
-            addMessage('replay', `Agent spec ready: ${result.spec.name}`, {
-              event: 'SPEC_GENERATED',
-              spec: result.spec,
-              session_id: sessionId,
-              action_sequence: result.spec.action_sequence,
-            })
-          } else {
-            addMessage('error', 'Failed to build spec: ' + JSON.stringify(result))
-          }
-        } catch (e) {
-          addMessage('error', `Build failed: ${e}`)
-        }
-      }
-
-      if (action === 'replay-confirmed') {
-        // User confirmed the replay — just acknowledge; correction sub-card is shown inline
-        addMessage('system', '3 screens → 1 screen. Same result. Correct anything below, or skip to publish.')
-        return
-      }
-
-      if (action === 'confirm-correction') {
-        const sessionId = data.session_id as string
-        const correction = data.correction as string
-        addMessage('system', correction ? 'Applying correction and regenerating spec...' : 'Publishing without correction...')
-        try {
-          const res = await fetch(`${API_BASE}/api/agents/build`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId, correction }),
-          })
-          const result = await res.json()
-          if (result.spec) {
-            addMessage('spec', `Updated spec: ${result.spec.name}`, {
-              event: 'SPEC_GENERATED',
-              spec: result.spec,
-              session_id: sessionId,
-            })
-          }
-        } catch (e) {
-          addMessage('error', `Spec update failed: ${e}`)
-        }
-        return
-      }
-
-      if (action === 'show-me') {
-        addMessage('system', 'Navigate to the correct source and click the relevant paragraph.')
-        window.parent.postMessage(
-          { type: 'r4mi:show-me', targetTab: 'policy', demoMode: true },
-          '*',
-        )
-        return
-      }
-
-      if (action === 'publish') {
-        const sessionId = data.session_id as string
-        if (!sessionId) return
-        // Mark spec message as acted
-        const sourceMsg = messages.find(
-          (m) => m.data?.session_id === sessionId && m.data?.event === 'SPEC_GENERATED',
-        )
-        if (sourceMsg) {
-          updateMessage(sourceMsg.id, { data: { _acted: true, _actedLabel: 'Publishing...' } })
-        }
-
-        addMessage('system', 'Publishing agent to Agentverse...')
-
-        try {
-          const res = await fetch(`${API_BASE}/api/agents/publish`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId }),
-          })
-          const published = await res.json()
-          addMessage('notification', `Agent published: ${published.name}`, {
-            event: 'AGENT_PUBLISHED',
-            ...published,
-          })
-        } catch (e) {
-          addMessage('error', `Publish failed: ${e}`)
-        }
-      }
-    },
-    [messages, addMessage, updateMessage],
-  )
-
-  // ── Recording ──────────────────────────────────────────────────────────
-  function handleRecordToggle() {
-    const next = !isRecording
-    setIsRecording(next)
-
-    if (next) {
-      const sessionId = `teach-${Date.now()}`
-      recordSessionRef.current = sessionId
-      window.parent.postMessage(
-        { type: 'r4mi:set-session', sessionId, permitType: '' },
-        '*',
-      )
-      addMessage('system', 'Recording started. Work through the workflow on the page. Click Stop when done.')
-    } else {
-      // Send a synthetic submit to finalize the session
-      const sessionId = recordSessionRef.current
-      if (sessionId) {
-        fetch(`${API_BASE}/api/observe`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: sessionId,
-            user_id: 'permit-tech-001',
-            timestamp: new Date().toISOString(),
-            event_type: 'submit',
-            screen_name: 'TEACH_MODE_COMPLETE',
-            element_selector: 'teach-stop-button',
-            element_value: null,
-          }),
-        }).catch(() => {})
-      }
-      recordSessionRef.current = null
-      window.parent.postMessage(
-        { type: 'r4mi:set-session', sessionId: '' },
-        '*',
-      )
-      addMessage('system', 'Recording stopped. Processing workflow — watch for pattern detection.')
+    } catch (e) {
+      log(`build error: ${e}`, 'error')
+    } finally {
+      setIsBuilding(false)
     }
   }
 
-  function handleAgentRun(specId: string, specName: string) {
-    window.parent.postMessage(
-      { type: 'r4mi:run-agent', specId, applicationId: activeApplicationId },
-      '*',
-    )
-    setShowAgentverse(false)
-    addMessage('system', `Running ${specName} on ${activeApplicationId || 'current application'}...`)
+  async function rebuildSpec(correction: string) {
+    if (!detected) return
+    setIsBuilding(true)
+    log(`applying correction: "${correction.slice(0, 50)}..."`)
+    try {
+      const res = await fetch(`${API_BASE}/api/agents/build`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: detected.session_id, correction }),
+      })
+      const result = await res.json()
+      if (result.spec) {
+        setSpec(result.spec as SpecData)
+        log('spec updated with correction', 'success')
+      }
+    } catch (e) {
+      log(`rebuild error: ${e}`, 'error')
+    } finally {
+      setIsBuilding(false)
+    }
   }
 
-  if (showAgentverse) {
+  async function publishAgent() {
+    if (!detected) return
+    setIsPublishing(true)
+    log('publishing agent to agentverse...')
+    try {
+      const res = await fetch(`${API_BASE}/api/agents/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: detected.session_id }),
+      })
+      const published = await res.json()
+      setPublishedName(published.name || 'unnamed')
+      setPhase('publishing')
+      log(`published: ${published.name}`, 'success')
+    } catch (e) {
+      log(`publish error: ${e}`, 'error')
+    } finally {
+      setIsPublishing(false)
+    }
+  }
+
+  function runAgent(specId: string, specName: string) {
+    window.parent.postMessage(
+      { type: 'r4mi:run-agent', specId, applicationId: activeAppId },
+      '*',
+    )
+    log(`running ${specName} on ${activeAppId || 'current app'}...`)
+    setPhase('idle')
+  }
+
+  function resetToIdle() {
+    setPhase('idle')
+    setDetected(null)
+    setSpec(null)
+    setPublishedName(null)
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
+  if (phase === 'agents') {
     return (
       <AgentverseDrawer
-        onClose={() => setShowAgentverse(false)}
-        activeApplicationId={activeApplicationId}
-        onRun={handleAgentRun}
+        onClose={() => setPhase('idle')}
+        activeApplicationId={activeAppId}
+        onRun={runAgent}
       />
     )
   }
@@ -291,95 +316,324 @@ export function SidebarApp() {
     <div style={root}>
       {/* Header */}
       <div style={header}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ color: '#6366f1', fontWeight: 700, fontSize: 14 }}>r4mi-ai</div>
-          <RecordButton isRecording={isRecording} onToggle={handleRecordToggle} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button
-            onClick={() => setShowAgentverse((v) => !v)}
-            style={headerBtn}
-            title="Browse agents"
-          >
-            Agents
-          </button>
+        <span style={headerTitle}>r4mi</span>
+        <span style={headerPhase}>
+          {phase === 'idle' && 'observing'}
+          {phase === 'recording' && '● recording'}
+          {phase === 'detected' && 'pattern found'}
+          {phase === 'replay' && 'replay'}
+          {phase === 'publishing' && 'published'}
+        </span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setPhase('agents')} style={headerBtn}>agents</button>
           <button
             onClick={() => window.parent.postMessage({ type: 'r4mi:close' }, '*')}
-            style={closeBtn}
-          >
-            x
-          </button>
+            style={headerBtn}
+          >x</button>
         </div>
       </div>
 
-      {/* Messages */}
-      <div style={messageList}>
-        {messages.map((msg) => (
-          <ChatMessage key={msg.id} msg={msg} onAction={handleAction} />
-        ))}
-        <div ref={messagesEndRef} />
+      {/* Main content area */}
+      <div style={mainArea}>
+
+        {/* ── IDLE ──────────────────────────────────────────── */}
+        {phase === 'idle' && (
+          <div style={phaseContainer}>
+            <div style={logArea}>
+              {messages.map((m) => (<ChatMessageComponent key={m.id} msg={m} />))}
+              <div ref={logsEndRef} />
+            </div>
+          </div>
+        )}
+
+        {/* ── RECORDING ─────────────────────────────────────── */}
+        {phase === 'recording' && (
+          <div style={phaseContainer}>
+            <div style={sectionLabel}>── teach mode ──</div>
+            <div style={{ padding: '8px 0' }}>
+              <div style={kvRow}>
+                <span style={kvKey}>voice:</span>
+                <span style={recording.feedback.narration ? kvVal : kvDim}>
+                  {recording.feedback.narration ?? 'listening...'}
+                </span>
+              </div>
+              <div style={kvRow}>
+                <span style={kvKey}>last:</span>
+                <span style={recording.feedback.lastAction ? kvVal : kvDim}>
+                  {recording.feedback.lastAction ?? '—'}
+                </span>
+              </div>
+              <div style={kvRow}>
+                <span style={kvKey}>steps:</span>
+                <span style={kvVal}>{recording.feedback.stepCount} captured</span>
+              </div>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <button onClick={stopRecording} style={btnDanger}>
+                ■ stop recording
+              </button>
+            </div>
+            <div style={{ ...logArea, marginTop: 16 }}>
+              {messages.map((m) => (<ChatMessageComponent key={m.id} msg={m} />))}
+              <div ref={logsEndRef} />
+            </div>
+          </div>
+        )}
+
+        {/* ── DETECTED ──────────────────────────────────────── */}
+        {phase === 'detected' && detected && (
+          <div style={phaseContainer}>
+            <div style={sectionLabel}>── pattern detected ──</div>
+            <div style={{ padding: '8px 0' }}>
+              <div style={kvRow}>
+                <span style={kvKey}>permit_type:</span>
+                <span style={kvVal}>{detected.permit_type}</span>
+              </div>
+              <div style={kvRow}>
+                <span style={kvKey}>sessions:</span>
+                <span style={kvVal}>{detected.match_count} matched</span>
+              </div>
+              {detected.scores?.map((s, i) => (
+                <div key={i} style={kvRow}>
+                  <span style={kvKey}>&gt;</span>
+                  <span style={kvVal}>
+                    {s.session} cos={s.score.toFixed(2)}{' '}
+                    <span style={{ color: s.score >= 0.85 ? CLR.green : CLR.dim }}>
+                      {s.score >= 0.85 ? '✓' : '✗'}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div style={{ ...kvVal, margin: '8px 0 12px', lineHeight: 1.5 }}>
+              r4mi can automate this workflow.{'\n'}
+              review the replay to approve each step.
+            </div>
+            <button
+              onClick={buildSpec}
+              disabled={isBuilding}
+              style={isBuilding ? { ...btnPrimary, opacity: 0.5 } : btnPrimary}
+            >
+              {isBuilding ? 'building...' : '▶ review replay'}
+            </button>
+            <div style={{ ...logArea, marginTop: 16 }}>
+              {messages.map((m) => (<ChatMessageComponent key={m.id} msg={m} />))}
+              <div ref={logsEndRef} />
+            </div>
+          </div>
+        )}
+
+        {/* ── REPLAY (HITL) ─────────────────────────────────── */}
+        {phase === 'replay' && spec && detected && (
+          <HITLReplay
+            spec={spec}
+            sessionId={detected.session_id}
+            applicationId={activeAppId || 'PRM-2024-0041'}
+            onPublish={publishAgent}
+            onCorrection={rebuildSpec}
+            isPublishing={isPublishing}
+            isRebuilding={isBuilding}
+          />
+        )}
+
+        {/* ── PUBLISHED ─────────────────────────────────────── */}
+        {phase === 'publishing' && (
+          <div style={phaseContainer}>
+            <div style={sectionLabel}>── published ──</div>
+            <div style={{ padding: '12px 0' }}>
+              <div style={{ color: CLR.green, marginBottom: 8 }}>
+                ✓ agent &quot;{publishedName}&quot; is live in agentverse.
+              </div>
+              <div style={kvVal}>
+                run it from the agents panel or type{' '}
+                <span style={{ color: CLR.accent }}>/agent-name app-id</span>{' '}
+                in any chat.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button onClick={() => setPhase('agents')} style={btnPrimary}>
+                open agents
+              </button>
+              <button onClick={resetToIdle} style={btnGhost}>
+                back
+              </button>
+            </div>
+            <div style={{ ...logArea, marginTop: 16 }}>
+              {messages.map((m) => (<ChatMessageComponent key={m.id} msg={m} />))}
+              <div ref={logsEndRef} />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Live capture feedback — visible only during recording */}
-      <CaptureFeedback
-        isRecording={isRecording}
-        narration={captureFeedback.narration}
-        lastAction={captureFeedback.lastAction}
-        lastScreenshot={captureFeedback.lastScreenshot}
-      />
-
-      {/* Input */}
-      <ChatInput
-        addMessage={addMessage}
-        isRecording={isRecording}
-        setIsRecording={setIsRecording}
-        onToggleAgentverse={() => setShowAgentverse((v) => !v)}
-      />
+      {/* Footer — teach me + command input */}
+      <ChatInput addMessage={addMessage} isRecording={recording.active} setIsRecording={() => phase === 'recording' ? stopRecording() : startRecording()} onToggleAgentverse={() => setPhase('agents')} />
     </div>
   )
+}
+
+// ── LogLine ─────────────────────────────────────────────────────────────────
+function LogLine({ entry }: { entry: LogEntry }) {
+  const color =
+    entry.level === 'success' ? CLR.green :
+    entry.level === 'warn' ? CLR.amber :
+    entry.level === 'error' ? CLR.red :
+    CLR.dim
+  const ts = new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return (
+    <div style={{ fontSize: 11, lineHeight: 1.6, fontFamily: MONO }}>
+      <span style={{ color: CLR.dim }}>{ts}</span>{' '}
+      <span style={{ color }}>{'>'}</span>{' '}
+      <span style={{ color: CLR.text }}>{entry.text}</span>
+    </div>
+  )
+}
+
+// ── Styles ──────────────────────────────────────────────────────────────────
+const MONO = "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace"
+
+const CLR = {
+  bg: '#09090b',
+  surface: '#18181b',
+  border: '#27272a',
+  text: '#f4f4f5',
+  dim: '#a1a1aa',
+  accent: '#FF7E67',
+  green: '#10b981',
+  amber: '#f59e0b',
+  red: '#ef4444',
 }
 
 const root: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   height: '100vh',
-  background: '#0f1117',
-  fontFamily: 'Inter, system-ui, sans-serif',
-  color: '#e2e8f0',
+  background: CLR.bg,
+  fontFamily: MONO,
+  color: CLR.text,
+  fontSize: 12,
 }
 
 const header: React.CSSProperties = {
   display: 'flex',
-  justifyContent: 'space-between',
   alignItems: 'center',
-  padding: '10px 12px',
-  borderBottom: '1px solid #2d3149',
+  gap: 8,
+  padding: '8px 12px',
+  borderBottom: `1px solid ${CLR.border}`,
   flexShrink: 0,
+}
+
+const headerTitle: React.CSSProperties = {
+  color: CLR.accent,
+  fontWeight: 700,
+  fontSize: 13,
+}
+
+const headerPhase: React.CSSProperties = {
+  color: CLR.dim,
+  fontSize: 11,
+  flex: 1,
 }
 
 const headerBtn: React.CSSProperties = {
   background: 'transparent',
-  border: '1px solid #2d3149',
-  color: '#94a3b8',
-  padding: '4px 10px',
+  border: `1px solid ${CLR.border}`,
+  color: CLR.dim,
+  padding: '3px 8px',
   cursor: 'pointer',
   fontSize: 11,
-  fontWeight: 600,
-  borderRadius: 4,
-  fontFamily: 'Inter, system-ui, sans-serif',
+  fontFamily: MONO,
+  borderRadius: 2,
 }
 
-const closeBtn: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: '#4a5568',
-  cursor: 'pointer',
-  fontSize: 18,
-  lineHeight: 1,
-}
-
-const messageList: React.CSSProperties = {
+const mainArea: React.CSSProperties = {
   flex: 1,
   overflowY: 'auto',
   padding: '8px 12px',
+}
+
+const phaseContainer: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+}
+
+const sectionLabel: React.CSSProperties = {
+  color: CLR.accent,
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: '0.05em',
+  marginBottom: 4,
+}
+
+const kvRow: React.CSSProperties = {
+  display: 'flex',
+  gap: 8,
+  marginBottom: 2,
+  fontSize: 12,
+  lineHeight: 1.6,
+}
+
+const kvKey: React.CSSProperties = {
+  color: CLR.dim,
+  minWidth: 90,
+  flexShrink: 0,
+}
+
+const kvVal: React.CSSProperties = {
+  color: CLR.text,
+  whiteSpace: 'pre-wrap',
+}
+
+const kvDim: React.CSSProperties = {
+  color: CLR.dim,
+  fontStyle: 'italic',
+}
+
+const logArea: React.CSSProperties = {
+  borderTop: `1px solid ${CLR.border}`,
+  paddingTop: 8,
+}
+
+const footer: React.CSSProperties = {
+  padding: '8px 12px',
+  borderTop: `1px solid ${CLR.border}`,
+  display: 'flex',
+  gap: 8,
+  flexShrink: 0,
+}
+
+const btnPrimary: React.CSSProperties = {
+  background: CLR.accent,
+  border: 'none',
+  color: '#fff',
+  padding: '6px 14px',
+  cursor: 'pointer',
+  fontSize: 11,
+  fontWeight: 600,
+  fontFamily: MONO,
+  borderRadius: 2,
+}
+
+const btnGhost: React.CSSProperties = {
+  background: 'transparent',
+  border: `1px solid ${CLR.border}`,
+  color: CLR.dim,
+  padding: '6px 14px',
+  cursor: 'pointer',
+  fontSize: 11,
+  fontWeight: 600,
+  fontFamily: MONO,
+  borderRadius: 2,
+}
+
+const btnDanger: React.CSSProperties = {
+  background: 'rgba(248, 81, 73, 0.1)',
+  border: `1px solid ${CLR.red}`,
+  color: CLR.red,
+  padding: '6px 14px',
+  cursor: 'pointer',
+  fontSize: 11,
+  fontWeight: 600,
+  fontFamily: MONO,
+  borderRadius: 2,
 }

@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-22T12:00:00Z",
+  "updated_at": "2026-03-22T18:00:00Z",
   "stories": [
     {
       "id": "US-01",
@@ -165,6 +165,81 @@
         ".github/workflows/e2e-demo.yml"
       ],
       "notes": "video: on; slowMo: 800ms default; artifacts uploaded for 7 days on each CI run"
+    },
+    {
+      "id": "US-14",
+      "title": "Fix GitHub Actions CI — backend startup timeout",
+      "epic": "Sprint 3 — CI Stabilisation",
+      "priority": "P1",
+      "status": "blocked",
+      "files_affected": [
+        ".github/workflows/e2e-demo.yml"
+      ],
+      "notes": "Backend fails to start in CI. Fixed: npx -y flags, npm ci for e2e deps, diagnostic logging. Awaiting verification. Fallback: run Playwright locally and screen-record."
+    },
+    {
+      "id": "US-15",
+      "title": "Update PROGRESS.md and kanban with CI blocker + decision point",
+      "epic": "Sprint 3 — CI Stabilisation",
+      "priority": "P0",
+      "status": "done",
+      "files_affected": [
+        "PROGRESS.md",
+        "backend/seed/kanban.json"
+      ],
+      "notes": "Documented current state, sprint history, what E2E covers vs doesn't, and options if CI can't be fixed"
+    },
+    {
+      "id": "US-16",
+      "title": "Phase-based sidebar state machine replacing chat thread",
+      "epic": "Sprint 4 — Sidebar Redesign",
+      "priority": "P0",
+      "status": "done",
+      "files_affected": [
+        "frontend/src/sidebar/SidebarApp.tsx"
+      ],
+      "notes": "Sidebar is now a phase machine: idle → recording → detected → replay → publishing → agents. Each phase is a distinct screen, not a chat message."
+    },
+    {
+      "id": "US-17",
+      "title": "HITL replay drives host page navigation with per-step approval",
+      "epic": "Sprint 4 — Sidebar Redesign",
+      "priority": "P0",
+      "status": "done",
+      "files_affected": [
+        "frontend/src/sidebar/components/HITLReplay.tsx",
+        "frontend/public/r4mi-loader.js",
+        "frontend/src/components/legacy/LegacyPermitApp.tsx",
+        "frontend/src/components/legacy/ApplicationForm.tsx",
+        "backend/routers/agents.py"
+      ],
+      "notes": "Replay navigates host page tabs (GIS, Policy, Form), fills fields with typing animation, waits for user approval at each step. New POST /api/agents/preview endpoint resolves step values from seed data. r4mi:navigate-tab and r4mi:replay-step postMessage handlers added."
+    },
+    {
+      "id": "US-18",
+      "title": "CLI/terminal aesthetic for sidebar and agentverse",
+      "epic": "Sprint 4 — Sidebar Redesign",
+      "priority": "P1",
+      "status": "done",
+      "files_affected": [
+        "frontend/src/sidebar/SidebarApp.tsx",
+        "frontend/src/sidebar/components/HITLReplay.tsx",
+        "frontend/src/sidebar/components/AgentverseDrawer.tsx"
+      ],
+      "notes": "Monospace fonts, dark terminal colors, log-line style output, minimal UI chrome. Looks like a developer tool, not a chat app."
+    },
+    {
+      "id": "US-19",
+      "title": "Bug fixes: form state persistence, stale agent cleanup, inbox navigation",
+      "epic": "Sprint 4 — Sidebar Redesign",
+      "priority": "P0",
+      "status": "done",
+      "files_affected": [
+        "frontend/src/components/legacy/LegacyPermitApp.tsx",
+        "frontend/src/components/legacy/ApplicationForm.tsx",
+        "backend/main.py"
+      ],
+      "notes": "Tabs use display:none (not conditional render) so form state persists. Form fields reset on app switch. Demo startup clears stale agents + non-seeded sessions to prevent AGENT_MATCH_FOUND instead of OPTIMIZATION_OPPORTUNITY."
     }
   ]
 }

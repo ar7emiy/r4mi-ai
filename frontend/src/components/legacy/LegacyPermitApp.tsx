@@ -52,6 +52,18 @@ export function LegacyPermitApp() {
     }
   }, [activeApplicationId])
 
+  // Listen for r4mi:navigate-tab from loader — HITL replay drives tab navigation
+  useEffect(() => {
+    function onNavigateTab(e: Event) {
+      const tab = (e as CustomEvent).detail?.tab as Tab
+      if (tab && TAB_LABELS[tab]) {
+        setActiveTab(tab)
+      }
+    }
+    window.addEventListener('r4mi:navigate-tab', onNavigateTab)
+    return () => window.removeEventListener('r4mi:navigate-tab', onNavigateTab)
+  }, [])
+
   // Listen for r4mi:show-me from loader — navigate to policy tab and enter teach-me mode
   useEffect(() => {
     function onShowMe(e: Event) {
@@ -180,17 +192,29 @@ export function LegacyPermitApp() {
           ))}
         </div>
 
-        {/* Main panel */}
-        <div style={{ flex: 1, padding: 16, background: '#fff' }}>
-          {activeTab === 'inbox' && (
+        {/* Main panel — all tabs stay mounted so form state survives tab switches */}
+        <div style={{ flex: 1, padding: 16, background: '#fff', position: 'relative' }}>
+          <div style={{ display: activeTab === 'inbox' ? 'block' : 'none' }}>
             <ApplicationInbox onSelectApp={() => setActiveTab('form')} />
-          )}
-          {activeTab === 'form' && <ApplicationForm />}
-          {activeTab === 'gis' && <GISLookup />}
-          {activeTab === 'policy' && <PolicyReference />}
-          {activeTab === 'code-enforcement' && <CodeEnforcement />}
-          {activeTab === 'owner-registry' && <OwnerRegistry />}
-          {activeTab === 'utilities' && <UtilityCapacity />}
+          </div>
+          <div style={{ display: activeTab === 'form' ? 'block' : 'none' }}>
+            <ApplicationForm />
+          </div>
+          <div style={{ display: activeTab === 'gis' ? 'block' : 'none' }}>
+            <GISLookup />
+          </div>
+          <div style={{ display: activeTab === 'policy' ? 'block' : 'none' }}>
+            <PolicyReference />
+          </div>
+          <div style={{ display: activeTab === 'code-enforcement' ? 'block' : 'none' }}>
+            <CodeEnforcement />
+          </div>
+          <div style={{ display: activeTab === 'owner-registry' ? 'block' : 'none' }}>
+            <OwnerRegistry />
+          </div>
+          <div style={{ display: activeTab === 'utilities' ? 'block' : 'none' }}>
+            <UtilityCapacity />
+          </div>
         </div>
       </div>
 

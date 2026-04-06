@@ -9,12 +9,13 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import Session
+from sqlmodel import Session, select
 from sqlalchemy import text
 
 from db import create_db_and_tables, engine
 from services.log_streamer import logger
 from models.session import SessionRecord, PatternState, AgentCorrection  # noqa: F401
+from models.agent_spec import NarrowAgentSpec  # noqa: F401
 from models.event import UIEvent, ActionTrace
 
 # ── routers ──────────────────────────────────────────────────────────────────
@@ -236,6 +237,22 @@ async def lifespan(app: FastAPI):
     logger.info("[r4mi-ai] Database initialized")
 
     if os.getenv("DEMO_SESSION_SEED", "false").lower() == "true":
+        # Clear stale agents and non-seeded sessions so the demo starts clean
+        with Session(engine) as db:
+            stale_agents = db.exec(select(NarrowAgentSpec)).all()
+            for agent in stale_agents:
+                db.delete(agent)
+            stale_sessions = db.exec(
+                select(SessionRecord).where(SessionRecord.is_seeded != True)
+            ).all()
+            for s in stale_sessions:
+                db.delete(s)
+            db.commit()
+            if stale_agents or stale_sessions:
+                logger.info(
+                    f"[r4mi-ai] Demo cleanup: removed {len(stale_agents)} agents, "
+                    f"{len(stale_sessions)} non-seeded sessions"
+                )
         logger.info("[r4mi-ai] DEMO_SESSION_SEED=true — seeding in background (non-blocking)...")
         asyncio.create_task(_seed_demo_sessions())
 

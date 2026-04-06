@@ -13,7 +13,7 @@
  *   4. Listens to SSE for notification badge
  *   5. postMessage bridge between sidebar iframe and host page
  */
-;(function () {
+; (function () {
   'use strict'
 
   if (window.__r4mi_loader_active) return
@@ -58,14 +58,35 @@
 
   var btn = document.createElement('button')
   btn.id = 'r4mi-toggle'
-  btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M8 12h8M12 8v8"/></svg>'
+  btn.innerHTML = '<img src="' + ORIGIN + '/r4mi-logo.png" style="width:28px;height:28px;object-fit:contain;pointer-events:none;" />'
   btn.style.cssText =
     'position:fixed;bottom:20px;right:20px;z-index:100000;' +
     'width:48px;height:48px;border-radius:50%;border:none;' +
-    'background:#6366f1;color:#fff;cursor:pointer;' +
+    'background:linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);color:#fff;cursor:pointer;' +
     'display:flex;align-items:center;justify-content:center;' +
-    'box-shadow:0 4px 12px rgba(99,102,241,0.4);' +
-    'transition:transform 0.2s,background 0.2s;'
+    'box-shadow:0 6px 16px rgba(255, 107, 107, 0.4);' +
+    'transition:transform 0.2s, right 0.3s ease, background 0.2s;'
+
+  // Guided auto-fill popup
+  var popup = document.createElement('div')
+  popup.id = 'r4mi-popup'
+  popup.style.cssText =
+    'position:fixed;bottom:24px;right:78px;z-index:99999;' +
+    'background:#1e1b4b;color:#e2e8f0;padding:8px 12px;border-radius:8px;' +
+    'font-size:12px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.3);' +
+    'border:1px solid #6366f1;cursor:pointer;' +
+    'display:none;align-items:center;opacity:0;transition:opacity 0.3s, transform 0.3s;transform:translateX(10px);'
+  popup.innerHTML = '<span style="color:#22c55e;margin-right:6px">✨</span> guided auto-fill available'
+  document.body.appendChild(popup)
+
+  var lastDetectedSession = null;
+  popup.addEventListener('click', function () {
+    popup.style.display = 'none';
+    if (!isOpen) toggleSidebar();
+    if (iframe.contentWindow && lastDetectedSession) {
+      iframe.contentWindow.postMessage({ type: 'r4mi:automation-alert', session_id: lastDetectedSession }, '*')
+    }
+  })
 
   // Badge
   var badge = document.createElement('span')
@@ -123,6 +144,11 @@
     sse.onmessage = function (e) {
       try {
         var data = JSON.parse(e.data)
+        if (data.event === 'OPTIMIZATION_OPPORTUNITY') {
+          lastDetectedSession = (data.data || data).session_id;
+          popup.style.display = 'flex';
+          setTimeout(function () { popup.style.opacity = '1'; popup.style.transform = 'translateX(0)'; }, 50);
+        }
         if (data.event && BADGE_EVENTS.indexOf(data.event) !== -1 && !isOpen) {
           unreadCount++
           badge.textContent = String(unreadCount)
@@ -131,7 +157,7 @@
           btn.style.transform = 'scale(1.15)'
           setTimeout(function () { btn.style.transform = 'scale(1)' }, 200)
         }
-      } catch (_) {}
+      } catch (_) { }
     }
   } catch (_) {
     // SSE not available — badge just won't update
@@ -186,7 +212,19 @@
           fetch(API_BASE + '/api/agents/' + msg.specId + '/run?application_id=' + encodeURIComponent(appId), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-          }).catch(function () {})
+          }).catch(function () { })
+        }
+        break
+
+      case 'r4mi:navigate-tab':
+        // HITL replay: sidebar requests host page to switch to a specific tab
+        window.dispatchEvent(new CustomEvent('r4mi:navigate-tab', { detail: { tab: msg.tab } }))
+        break
+
+      case 'r4mi:replay-step':
+        // HITL replay: sidebar sends one step at a time to fill on the host page
+        if (msg.step) {
+          window.dispatchEvent(new CustomEvent('r4mi:demo-step', { detail: msg.step }))
         }
         break
 

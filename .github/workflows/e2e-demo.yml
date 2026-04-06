@@ -58,15 +58,17 @@ jobs:
         run: npm run build
 
       - name: Serve frontend
-        run: npx serve -s frontend/dist -p 3000 &
+        run: npx -y serve -s frontend/dist -p 3000 &
 
       - name: Wait for servers
         run: |
-          npx wait-on http://localhost:8000/health http://localhost:3000 --timeout 90000
+          npx -y wait-on http://localhost:8000/health http://localhost:3000 --timeout 90000
 
-      - name: Install Playwright browsers
+      - name: Install E2E deps + Playwright browsers
         working-directory: e2e
-        run: npx playwright install --with-deps chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
 
       - name: Run E2E tests
         working-directory: e2e

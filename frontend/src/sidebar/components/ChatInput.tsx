@@ -45,8 +45,24 @@ export function ChatInput({ addMessage, isRecording, setIsRecording, onToggleAge
             '  /agents — browse available agents',
             '  /record — toggle teach-me recording',
             '  /{agent-name} {app-id} — run an agent',
+            '  /suggest-flow — get automation suggestions',
             '  /help — show this message',
           ].join('\n'))
+          return
+
+        case '/suggest-flow':
+          addMessage('user', text)
+          try {
+            const res = await fetch(`${API_BASE}/api/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: text }),
+            })
+            const data = await res.json()
+            if (data.reply) {
+              addMessage('system', data.reply)
+            }
+          } catch { }
           return
 
         default: {

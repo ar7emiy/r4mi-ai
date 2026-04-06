@@ -273,6 +273,76 @@ def log_correction(
     return {"status": "ok"}
 
 
+class PreviewRequest(BaseModel):
+    session_id: str
+    application_id: str = "PRM-2024-0041"
+
+
+@router.post("/api/agents/preview")
+async def preview_agent(
+    body: PreviewRequest,
+    db: Session = Depends(get_session),
+):
+    """Resolve step values without persisting — for HITL replay preview.
+
+    Returns each step with its resolved value, source tag, and the host
+    page screen the user should see during replay.
+    """
+    import pathlib
+
+    record = db.get(SessionRecord, body.session_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    draft = record.candidate_spec_draft
+    if not draft:
+        raise HTTPException(status_code=400, detail="No spec draft — build first")
+
+    seed_path = pathlib.Path(__file__).parent.parent / "seed" / "applications.json"
+    applications = json.loads(seed_path.read_text())
+    application = next(
+        (a for a in applications if a["application_id"] == body.application_id), {}
+    )
+
+    from agents.narrow_agent import NarrowAgent
+    agent = NarrowAgent()
+
+    resolved_zone = "R-2"
+    resolved_steps = []
+    for step_def in (draft.get("action_sequence") or []):
+        result = await agent._execute_step(
+            step_def, application, draft.get("knowledge_sources", []), resolved_zone
+        )
+        field = step_def.get("field", "").lower()
+        if field == "zone_classification" and result.get("value"):
+            resolved_zone = result["value"]
+
+        # Map step to host page screen based on source
+        source = step_def.get("source", "").lower()
+        if "gis" in source or "parcel" in source:
+            screen = "gis"
+        elif "§" in step_def.get("source", "") or "pdf" in source or "policy" in source or "municipal" in source:
+            screen = "policy"
+        else:
+            screen = "form"
+
+        resolved_steps.append({
+            **step_def,
+            "value": result.get("value", ""),
+            "source_tag": result.get("source_tag", step_def.get("source", "")),
+            "confidence": result.get("confidence", 0.5),
+            "screen": screen,
+        })
+
+    return {
+        "spec_name": draft.get("name", ""),
+        "spec_description": draft.get("description", ""),
+        "permit_type": draft.get("permit_type", ""),
+        "steps": resolved_steps,
+        "knowledge_sources": draft.get("knowledge_sources", []),
+    }
+
+
 @router.post("/api/agents/{spec_id}/run")
 async def run_agent(
     spec_id: str,
