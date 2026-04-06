@@ -61,6 +61,7 @@ export function SidebarApp() {
 
   const [isDark, setIsDark] = useState(true)
   const [tab, setTab] = useState<'chat' | 'activity'>('chat')
+  const [captureLogs, setCaptureLogs] = useState<Array<any>>([])
   const [isRecordingPaused, setIsRecordingPaused] = useState(localStorage.getItem('r4mi_pause_recording') === 'true')
 
   const toggleRecordingPause = () => {
@@ -389,7 +390,7 @@ export function SidebarApp() {
 
           {captureLogs.length === 0 && <div style={{ color: CLR.dim, fontSize: 11 }}>No activity captured yet. Start recording to see telemetry.</div>}
 
-          {captureLogs.map((log, i) => (
+          {captureLogs.map((log) => (
             <div key={log.id} style={{ padding: '8px 12px', background: CLR.surface, border: `1px solid ${CLR.border}`, borderRadius: 4, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <div style={{ color: CLR.dim, fontSize: 10, paddingTop: 2, minWidth: 60 }}>{new Date(log.ts).toISOString().split('T')[1].slice(0, 8)}</div>
               <div style={{ flex: 1 }}>
@@ -416,7 +417,7 @@ export function SidebarApp() {
             </div>
           ))}
           {/* Also show system chat messages */}
-          {messages.filter(m => m.type === 'system' || m.type === 'spec').map((m, i) => (
+          {messages.filter(m => m.type === 'system' || m.type === 'spec').map((m) => (
             <div key={m.id} style={{ padding: '8px 12px', background: CLR.bg, borderLeft: `2px solid ${CLR.accent}`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <div style={{ color: CLR.dim, fontSize: 10, paddingTop: 2, minWidth: 60 }}>{new Date(m.timestamp).toISOString().split('T')[1].slice(0, 8)}</div>
               <div style={{ flex: 1 }}>
