@@ -59,7 +59,13 @@ SPEC_SCHEMA = {
 
 class SpecBuilderAgent:
     def __init__(self):
-        self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        self._client: genai.Client | None = None
+
+    @property
+    def client(self) -> genai.Client:
+        if self._client is None:
+            self._client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        return self._client
 
     def _build_prompt(
         self,

@@ -15,8 +15,14 @@ EMBEDDING_DIMS = 768  # match legacy text-embedding-004 output size
 
 class EmbeddingService:
     def __init__(self):
-        self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        self._client: genai.Client | None = None
         self._cache: dict[str, list[float]] = {}
+
+    @property
+    def client(self) -> genai.Client:
+        if self._client is None:
+            self._client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        return self._client
 
     async def embed(self, text: str, cache_key: str) -> list[float]:
         if cache_key in self._cache:
@@ -32,8 +38,8 @@ class EmbeddingService:
             )
         except Exception as e:
             msg = str(e)
-            if any(k in msg for k in ("429", "quota", "RESOURCE_EXHAUSTED", "Quota")):
-                logger.warning(f"[Embedding] QUOTA EXHAUSTED — {msg[:120]}")
+            if any(k in msg for k in ("429", "quota", "RESOURCE_EXHAUSTED", "Quota", "403", "Forbidden")):
+                logger.warning(f"[Embedding] API ERROR (quota/auth) — {msg[:120]}")
                 raise QuotaExhaustedException(msg) from e
             raise
         latency_ms = int((time.time() - t0) * 1000)
