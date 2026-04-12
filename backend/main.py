@@ -119,6 +119,14 @@ async def _seed_demo_sessions():
     submission by any public user immediately triggers READY state
     (DEMO_SESSION_SEED=true).
     """
+    try:
+        await _do_seed_demo_sessions()
+    except Exception as exc:
+        logger.error(f"[Seed] Seeding failed — {type(exc).__name__}: {exc}")
+        logger.error("[Seed] Sessions will not be pre-loaded; demo features requiring prior sessions will not work")
+
+
+async def _do_seed_demo_sessions():
     from services.embedding_service import embedding_service
 
     WORKFLOW_SEEDS = [

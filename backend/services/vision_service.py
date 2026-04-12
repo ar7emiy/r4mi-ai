@@ -13,8 +13,14 @@ from services.exceptions import QuotaExhaustedException
 
 class VisionService:
     def __init__(self):
-        self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        self._client: genai.Client | None = None
         self._cache: dict[str, list[KnowledgeSource]] = {}
+
+    @property
+    def client(self) -> genai.Client:
+        if self._client is None:
+            self._client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        return self._client
 
     def _cache_key(self, session_id: str, screen_name: str) -> str:
         return f"{session_id}::{screen_name}"
@@ -64,8 +70,8 @@ source_type must be one of: policy_text, case_note, freetext, table"""
             )
         except Exception as e:
             msg = str(e)
-            if any(k in msg for k in ("429", "quota", "RESOURCE_EXHAUSTED", "Quota")):
-                logger.warning(f"[Vision] QUOTA EXHAUSTED — {msg[:120]}")
+            if any(k in msg for k in ("429", "quota", "RESOURCE_EXHAUSTED", "Quota", "403", "Forbidden")):
+                logger.warning(f"[Vision] API ERROR (quota/auth) — {msg[:120]}")
                 raise QuotaExhaustedException(msg) from e
             raise
         latency_ms = int((time.time() - t0) * 1000)
