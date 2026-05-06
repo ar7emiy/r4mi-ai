@@ -1,6 +1,120 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # r4mi-ai — Claude Code Master Build Instructions
 
-Read this file first. Then read ARCHITECTURE.md, WORKFLOWS.md, DEMO_SCRIPT.md, and DESIGN.md before writing a single line of code.
+Read this file first. Then read ARCHITECTURE.md, WORKFLOWS.md, DEMO_SCRIPT.md, and DESIGN.md before writing a single line of code. PROGRESS.md tracks build history and known bugs; PLAN.md tracks current sprint scope.
+
+---
+
+## Commands
+
+### Dev servers (run both; e2e expects them on :8000 and :3000)
+```bash
+# Backend
+cd backend && uvicorn main:app --reload --port 8000
+# Frontend
+cd frontend && npm run dev                 # vite on :3000
+# One-shot full stack
+docker compose up                          # backend + frontend + volume-mounted seeds
+```
+
+### Frontend build / typecheck
+```bash
+cd frontend && npm run build                # tsc -b && vite build (typecheck is part of build)
+cd frontend && npm run preview              # serve built dist
+```
+There is no separate lint/format step configured. TypeScript errors from `tsc -b` are the gate.
+
+### Tests (Playwright E2E — servers must already be running)
+```bash
+cd e2e
+npm run test:health            # fast sanity, no Gemini calls (~5s)
+npm run test:demo              # full 7-beat demo flow, real Gemini (20–90s)
+npm run test:headed            # watch browser with slow-mo
+npm run test:ui                # interactive Playwright UI
+npm run test:beat -- "Beat 3"  # run a single beat by grep
+npx playwright show-report     # view last run's report (failures + traces)
+```
+Playwright config (`e2e/playwright.config.ts`): serial (`fullyParallel: false` — beats are stateful), 180s per-test timeout, 30s expect timeout for SSE-driven UI. Flakiness is almost always Gemini API latency — retry before debugging.
+
+### No Python test suite is wired up beyond the e2e Playwright flow. Do not assume `pytest` is runnable.
+
+---
+
+## Current Implementation Notes (supersede the spec below where they conflict)
+
+The spec further down documents the intended build. Six non-Claude commits on 2026-04-05/06 (`5bf7f98`, `123d571`, `0cc77f4`, `3fcf458`, `5cf57f9`, `83fa4dc`) reshaped significant parts of the system. Treat these as the current ground truth:
+
+### Sidebar is a phase-based state machine
+- [frontend/src/sidebar/SidebarApp.tsx](frontend/src/sidebar/SidebarApp.tsx) defines `type Phase = 'idle' | 'recording' | 'detected' | 'replay' | 'publishing' | 'agents'` and switches the whole sidebar UI on it. There is no more independent chat thread + buttons model; the sidebar renders a different surface per phase.
+- The sidebar is persistent (iframe always mounted, collapsed until opened) and chat-first. A dark/light theme is driven by a `CLR` CSS-variable object exported from `SidebarApp.tsx` and mutated on theme toggle. **Reuse `CLR` for any new sidebar styling** — do not hardcode hex colors. `frontend/refactor_clr.py` is the one-shot codemod that introduced this.
+- Sidebar tabs: `chat` and `activity`. The activity tab shows `captureLogs` from `capture.js` narration events.
+
+### HITL replay replaced per-field gates during replay
+- [frontend/src/sidebar/components/HITLReplay.tsx](frontend/src/sidebar/components/HITLReplay.tsx) owns the `replay` phase. It calls `POST /api/agents/preview` on mount to resolve every step's value + source tag, then walks the user through step-by-step approve/correct with `data-testid="replay-approve"` buttons.
+- As each step becomes current, HITLReplay posts `r4mi:navigate-tab` and `r4mi:demo-step` messages to the parent via postMessage. The host page is driven by `r4mi-loader.js`, not React state.
+- `ApprovalGate.tsx` still exists and is used for real agent runs (Beat 6), but the replay path no longer touches it.
+
+### `POST /api/agents/preview` (new endpoint)
+- Defined at [backend/routers/agents.py:281](backend/routers/agents.py#L281). Dry-runs `NarrowAgent._execute_step` against `seed/applications.json` for each step in the draft spec **without persisting**. Classifies each step to a host screen (`gis` / `policy` / `form`) based on its `source` field (contains `"gis"`/`"parcel"` → gis; contains `§` or `"pdf"`/`"policy"`/`"municipal"` → policy; else form). Any change to `_execute_step` must keep this dry-run path working.
+
+### `r4mi-loader.js` is now a thick client, not just a relay
+[frontend/public/r4mi-loader.js](frontend/public/r4mi-loader.js) is vanilla JS but now handles:
+- **Guided auto-fill popup**: on `OPTIMIZATION_OPPORTUNITY` SSE it pops a "✨ guided auto-fill available" bubble next to the toggle button; click opens the sidebar and posts `r4mi:automation-alert` with `session_id`.
+- **`r4mi:navigate-tab` handler**: receives from sidebar → dispatches a `r4mi:navigate-tab` window event that `LegacyPermitApp` listens for to switch tabs.
+- **`r4mi:demo-step` handler**: receives each resolved step from HITLReplay and drives the host page animation. For editable inputs it does a typing animation directly on the DOM; **for read-only elements it overlays a dashed amber virtual-input box with the value**. The source tag label is appended as an absolutely-positioned span. Field routing: `zone*` → `[data-testid="field-zone"]`, `note*`/`decision*` → `[data-testid="field-notes"]`, `height*`/`max*` → `[data-testid="field-max-height"]`.
+- Toggle button uses the `r4mi-ai-logo.png` image with an orange gradient background (not the old indigo plus-circle SVG).
+
+### React ApplicationForm no longer animates demo fills
+- [frontend/src/components/legacy/ApplicationForm.tsx](frontend/src/components/legacy/ApplicationForm.tsx) lost its `demoSteps` subscription, `typeValue` helper, `sourceTags` state, and `testId`/`sourceTag` props on `FormRow`. All of that logic moved into `r4mi-loader.js`'s `r4mi:demo-step` handler (see above). **Do not re-add typing animation to React** — the loader owns it.
+- The form now resets its local state on `activeApplicationId` change.
+
+### Legacy tabs are kept mounted (display toggle, not unmount)
+- [frontend/src/components/legacy/LegacyPermitApp.tsx](frontend/src/components/legacy/LegacyPermitApp.tsx) renders all tab components simultaneously and toggles `display: none`. This is load-bearing: the demo test asserts `field-zone` still has value `R-2` after the user switches tabs. Do not regress to conditional mounting.
+- `LegacyPermitApp` also listens for the `r4mi:navigate-tab` window event to drive tab switches from the sidebar.
+
+### Backend demo cleanup on startup
+- [backend/main.py](backend/main.py) lifespan, when `DEMO_SESSION_SEED=true`, **deletes all `NarrowAgentSpec` rows and all non-seeded `SessionRecord` rows before re-seeding**. This is what keeps the demo idempotent across restarts. `SessionRecord.is_seeded` is the flag used to discriminate.
+- Seeding happens in a background task (`asyncio.create_task`) so uvicorn doesn't block on Gemini calls at boot.
+
+### Kanban is a first-class surface
+- [backend/routers/kanban.py](backend/routers/kanban.py) + [backend/seed/kanban.json](backend/seed/kanban.json) back a kanban view inside the sidebar. The seed JSON schema has been re-shaped multiple times in these commits — treat the current file as the source of truth, not any older doc. Do not regress the trailing-comma fix from `123d571`.
+
+### Chat system prompt rewritten
+- [backend/routers/chat.py](backend/routers/chat.py)'s `SYSTEM_PROMPT` now emphasizes `/suggest-flow` commands, describing agents (utility/goals/inputs/outputs), and explaining r4mi's current understanding of the webpage and user intent. Keep that framing if you touch the prompt.
+
+### Recording pause enforced at capture layer
+- [frontend/public/capture.js](frontend/public/capture.js) `postEvent` drops the POST early if `localStorage.r4mi_pause_recording === 'true'`. The sidebar's pause toggle writes that key. **Any new capture-side POST must respect this flag.**
+- `capture.js` dispatches `r4mi:capture-live` CustomEvents with narration payloads that feed `CaptureFeedback.tsx`. Do not regress that event shape.
+
+### CaptureFeedback + AgentverseDrawer
+- [frontend/src/sidebar/components/CaptureFeedback.tsx](frontend/src/sidebar/components/CaptureFeedback.tsx) renders live narration from `capture.js` during teach-me mode.
+- [frontend/src/sidebar/components/AgentverseDrawer.tsx](frontend/src/sidebar/components/AgentverseDrawer.tsx) was restyled to the `CLR` theme and now uses plain-text clickable targets (`run`, `agents`) rather than `<button role=…>` — the e2e test matches them via `getByText('agents', { exact: true })` and `getByText('run')`.
+
+### E2E demo test was rewritten around the new flow
+[e2e/tests/demo.spec.ts](e2e/tests/demo.spec.ts) beats were restructured. When touching any of these, re-run the full demo:
+- **Beat 2**: asserts `/pattern detected/i` and `/review replay/i` in sidebar (not "Build Agent from Pattern").
+- **Beat 3**: clicks `/review replay/i` text (not a button) to enter `replay` phase.
+- **Beat 4** (now "HITL Step Approval"): loops up to 8 times clicking `sidebar.getByTestId('replay-approve')` with a 5s visibility timeout per iteration, breaking when the button no longer appears. Expects `/review complete|all.*steps reviewed/i` at the end. The old "Show me → click §14.3 PDF → Confirm & continue" correction flow is **gone** from the happy path.
+- **Beat 5**: clicks `getByText(/publish agent/i)`, expects `/published/i`.
+- **Beat 6**: asserts zone value persists via mounted tabs, opens agents view via `getByText('agents', { exact: true })`, clicks `getByText('run')`.
+- **Beat 1 extra**: asserts `R-2` in `field-zone` after switching tabs — load-bearing for the mounted-tabs architecture.
+
+### CI workflow
+- [.github/workflows/e2e-demo.yml](.github/workflows/e2e-demo.yml) now runs `npm ci` inside `e2e/` **before** `npx playwright install` (previously it skipped the dep install and relied on npx-on-demand). It also uses `npx -y` consistently to skip prompts.
+
+### System view route was enhanced
+- The `/system` route was upgraded beyond plain Mermaid rendering — check [frontend/update_system_view.py](frontend/update_system_view.py) history and the route itself before assuming `system-diagram.mermaid` is the only source of truth.
+
+### Backend router set (beyond what the Project Structure section lists)
+- `chat.py`, `kanban.py`, `_sse_bus.py` are real routers now.
+- `services/exceptions.py` defines `QuotaExhaustedException`; the agents router catches it and surfaces Gemini quota errors to the UI.
+- `services/sse_bus.py` (imported as `sse_bus`) is the canonical broadcast channel for non-log SSE events.
+
+### Root-level `update_*.py` scripts are historical codemods
+`update_chat_input.py`, `update_form.py`, `update_loader.py`, `update_sidebar.py`, `update_sidebar_phase2.py`, `update_sidebar_cssvars.py`, `frontend/refactor_clr.py`, `frontend/update_system_view.py` are one-shot scripts used to generate the above changes. **Do not re-run them** (they'd corrupt the current files) and do not model new refactors after them unless explicitly asked.
 
 ---
 
