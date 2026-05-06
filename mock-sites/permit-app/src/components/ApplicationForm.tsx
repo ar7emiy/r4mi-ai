@@ -137,6 +137,7 @@ export function ApplicationForm() {
           value={zone}
           onChange={setZone}
           required
+          testId="field-zone"
         />
         {permitCfg.showFenceFields && (
           <FormRow
@@ -152,6 +153,7 @@ export function ApplicationForm() {
           onChange={setMaxHeight}
           required
           placeholder={permitCfg.constraintPlaceholder}
+          testId="field-max-height"
         />
         {permitCfg.showFenceFields && (
           <FormRow
@@ -207,6 +209,7 @@ function FormRow({
   required = false,
   placeholder = '',
   wide = false,
+  testId,
 }: {
   label: string
   value: string
@@ -215,6 +218,7 @@ function FormRow({
   required?: boolean
   placeholder?: string
   wide?: boolean
+  testId?: string
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', padding: '3px 8px', gap: 8 }}>
@@ -224,6 +228,7 @@ function FormRow({
       <div style={{ flex: 1 }}>
         {wide ? (
           <textarea
+            data-testid={testId}
             className="legacy-input"
             value={value}
             readOnly={readOnly}
@@ -232,6 +237,7 @@ function FormRow({
           />
         ) : (
           <input
+            data-testid={testId}
             className="legacy-input"
             value={value}
             readOnly={readOnly}

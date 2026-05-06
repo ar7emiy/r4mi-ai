@@ -1,29 +1,48 @@
 import { useState, useEffect, useRef } from 'react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+interface ElementFingerprint {
+  role: string
+  accessible_name: string
+  landmark?: string
+  surrounding_text?: string
+  position_signature?: string
+  url_pattern?: string
+}
+
+interface SourceFetch {
+  method: string
+  url_template: string
+  expected_status?: number
+  response_jsonpath?: string
+}
+
 interface ResolvedStep {
   step: number
+  // Site-agnostic 5-action vocabulary: read | fetch | reason | write | assert
   action: string
   description: string
-  field: string
   value: string
-  source: string
   source_tag: string
   confidence: number
-  screen: 'gis' | 'policy' | 'form'
+  target_fingerprint?: ElementFingerprint | null
+  source_fetch?: SourceFetch | null
 }
 
 interface SpecData {
   name: string
   description: string
-  permit_type: string
+  // cluster_label replaces permit_type — discovered post-hoc by cluster_service
+  cluster_id?: string | null
+  cluster_label?: string | null
+  permit_type?: string  // legacy
   action_sequence: Array<{
     step: number
     action: string
     description: string
-    field: string
-    value?: string
-    source: string
+    target_fingerprint?: ElementFingerprint | null
+    source_fetch?: SourceFetch | null
+    value_template?: string
   }>
   knowledge_sources: Array<{
     type: string
@@ -36,7 +55,9 @@ interface SpecData {
 interface PreviewResponse {
   spec_name: string
   spec_description: string
-  permit_type: string
+  cluster_id?: string | null
+  cluster_label?: string | null
+  permit_type?: string  // legacy
   steps: ResolvedStep[]
   knowledge_sources: Array<{
     type: string
@@ -60,10 +81,20 @@ const API_BASE =
   new URLSearchParams(window.location.search).get('api') ||
   'http://localhost:8000'
 
-const SCREEN_LABELS: Record<string, string> = {
-  gis: 'GIS PARCEL LOOKUP',
-  policy: 'POLICY REFERENCE',
-  form: 'APPLICATION FORM',
+// Step-screen labels are now derived from the step's own context — either
+// the source_fetch URL (for FETCH steps) or the target fingerprint's
+// landmark/accessible-name (for READ/WRITE/ASSERT steps). No hardcoded
+// permit-domain mapping.
+function describeStepTarget(step: ResolvedStep): string {
+  if (step.source_fetch && step.source_fetch.url_template) {
+    return `${step.source_fetch.method} ${step.source_fetch.url_template}`
+  }
+  if (step.target_fingerprint && step.target_fingerprint.accessible_name) {
+    const name = step.target_fingerprint.accessible_name
+    const role = step.target_fingerprint.role || 'element'
+    return `${role}: ${name}`
+  }
+  return step.action.toUpperCase()
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -123,9 +154,18 @@ export function HITLReplay({ spec, sessionId, applicationId, onPublish, onCorrec
       return next
     })
 
-    window.parent.postMessage({ type: 'r4mi:navigate-tab', tab: step.screen }, '*')
+    // Tab navigation is hint-only: derive a friendly tab name from the
+    // step's URL pattern when available, else from the target landmark.
+    // Hosts that listen for `r4mi:navigate-tab` can switch to that tab; if
+    // they don't, the resolver still finds the target across the current
+    // DOM.
+    const tabHint =
+      step.source_fetch?.url_template ||
+      step.target_fingerprint?.landmark ||
+      step.action
+    window.parent.postMessage({ type: 'r4mi:navigate-tab', tab: tabHint }, '*')
 
-    // Phase 2: After a short delay for tab animation, fill the field
+    // Phase 2: After a short delay for tab animation, drive the host page
     const navTimer = setTimeout(() => {
       setStepStatus((prev) => {
         const next = [...prev]
@@ -133,16 +173,21 @@ export function HITLReplay({ spec, sessionId, applicationId, onPublish, onCorrec
         return next
       })
 
-      // Only send field fill for form-filling steps (not pure lookups)
-      if (step.value) {
+      // Send the resolved step to r4mi-loader. The loader uses
+      // element_resolver.js to find the DOM target by fingerprint and
+      // animates the value in (or replays the captured fetch for FETCH
+      // steps).
+      if (step.value || step.target_fingerprint || step.source_fetch) {
         window.parent.postMessage(
           {
-            type: 'r4mi:replay-step',
+            type: 'r4mi:demo-step',
             step: {
-              field: step.field,
+              action: step.action,
               value: step.value,
               source_tag: step.source_tag,
-              action: step.action,
+              target_fingerprint: step.target_fingerprint,
+              source_fetch: step.source_fetch,
+              description: step.description,
             },
           },
           '*',
@@ -321,16 +366,20 @@ export function HITLReplay({ spec, sessionId, applicationId, onPublish, onCorrec
           {/* Navigation status */}
           {activeStatus === 'navigating' && (
             <div style={{ color: CLR.accent, fontSize: 11, margin: '6px 0' }}>
-              navigating to {SCREEN_LABELS[activeStep.screen] || activeStep.screen}...
+              locating {describeStepTarget(activeStep)}...
             </div>
           )}
 
           {/* Filling status */}
           {activeStatus === 'filling' && (
             <div style={{ color: CLR.accent, fontSize: 11, margin: '6px 0' }}>
-              {activeStep.value
-                ? `filling ${activeStep.field}...`
-                : `reading ${SCREEN_LABELS[activeStep.screen] || activeStep.screen}...`}
+              {activeStep.action === 'fetch'
+                ? `replaying ${activeStep.source_fetch?.url_template || 'fetch'}...`
+                : activeStep.action === 'reason'
+                ? `reasoning...`
+                : activeStep.value
+                ? `${activeStep.action}: ${activeStep.target_fingerprint?.accessible_name || 'element'}...`
+                : `${activeStep.action}...`}
             </div>
           )}
 
@@ -338,9 +387,8 @@ export function HITLReplay({ spec, sessionId, applicationId, onPublish, onCorrec
           {isWaiting && (
             <>
               <div style={{ padding: '4px 0' }}>
-                <div style={kvRow}><span style={kvKey}>screen:</span><span style={kvVal}>{SCREEN_LABELS[activeStep.screen]}</span></div>
                 <div style={kvRow}><span style={kvKey}>action:</span><span style={kvVal}>{activeStep.action}</span></div>
-                <div style={kvRow}><span style={kvKey}>field:</span><span style={kvVal}>{activeStep.field}</span></div>
+                <div style={kvRow}><span style={kvKey}>target:</span><span style={kvVal}>{describeStepTarget(activeStep)}</span></div>
                 <div style={kvRow}>
                   <span style={kvKey}>value:</span>
                   <span style={{ color: CLR.green, fontWeight: 600 }}>{activeStep.value || '—'}</span>

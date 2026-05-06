@@ -35,6 +35,15 @@ class SessionRecord(SQLModel, table=True):
     generated_spec_id: Optional[str] = None
     matched_spec_id: Optional[str] = None  # set when AGENT_MATCH_FOUND fires
     candidate_spec_draft: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    # Captured network calls the host app made during this session — populated
+    # by /api/observe/network. Each entry: {method, url, request_body,
+    # response_body, response_headers, timestamp, screen_at_request}.
+    # Used by SpecBuilder as ground truth for what data the workflow consumes
+    # and replayed by NarrowAgent at agent run time (via host postMessage).
+    network_calls: list = Field(default_factory=list, sa_column=Column(JSON))
+    # Cluster discovered post-hoc by services/cluster_service.py (replaces permit_type).
+    cluster_id: Optional[str] = Field(default=None, index=True)
+    cluster_label: Optional[str] = None
     started_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
     is_seeded: bool = False

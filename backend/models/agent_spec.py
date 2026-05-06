@@ -20,7 +20,13 @@ class NarrowAgentSpec(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     name: str
     description: str
-    permit_type: str
+    # DEPRECATED: kept for legacy reads only. Defaults to empty string. New
+    # specs are identified by cluster_id + cluster_label, which are the
+    # site-agnostic replacement for permit_type. Removed in a future cleanup
+    # once nothing reads permit_type.
+    permit_type: str = ""
+    cluster_id: Optional[str] = Field(default=None, index=True)
+    cluster_label: Optional[str] = None
     trigger_pattern: dict = Field(default_factory=dict, sa_column=Column(JSON))
     action_sequence: list = Field(default_factory=list, sa_column=Column(JSON))
     knowledge_sources: list = Field(default_factory=list, sa_column=Column(JSON))

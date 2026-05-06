@@ -8,7 +8,11 @@ interface Agent {
   id: string
   name: string
   description: string
-  permit_type: string
+  // permit_type kept as a legacy field for older spec rows; new specs use
+  // cluster_label, which is the site-agnostic discovered workflow name.
+  permit_type?: string
+  cluster_id?: string | null
+  cluster_label?: string | null
   trust_level: string
   successful_runs: number
   failed_runs: number
@@ -71,7 +75,7 @@ export function AgentverseDrawer({ onClose, activeApplicationId, onRun }: Props)
               <div style={{ color: CLR.dim, fontSize: 10, marginBottom: 6 }}>{a.description}</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: CLR.dim, fontSize: 10 }}>
-                  {a.successful_runs} runs | {a.permit_type}
+                  {a.successful_runs} runs | {a.cluster_label || a.permit_type || 'workflow'}
                 </span>
                 {!isStale && (
                   <button

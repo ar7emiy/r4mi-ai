@@ -9,6 +9,7 @@ from models.agent_spec import NarrowAgentSpec
 from agents.observer_agent import observer_agent
 from services.sse_bus import sse_bus
 from services.exceptions import QuotaExhaustedException
+from services.network_capture_service import network_capture_service, NetworkCall
 
 router = APIRouter()
 
@@ -28,7 +29,12 @@ async def observe(
     if sse_type:
         payload: dict = {"session_id": event.session_id}
         if session:
+            # cluster_label is the site-agnostic replacement for permit_type;
+            # permit_type stays in the payload for backwards compatibility
+            # until the frontend fully migrates to cluster labels.
             payload["permit_type"] = session.permit_type
+            payload["cluster_id"] = session.cluster_id
+            payload["cluster_label"] = session.cluster_label
             # Enrich AGENT_MATCH_FOUND with matched spec details
             if sse_type == SSEEventType.AGENT_MATCH_FOUND and session.matched_spec_id:
                 matched = db.get(NarrowAgentSpec, session.matched_spec_id)
@@ -45,3 +51,18 @@ async def observe(
         await sse_bus.publish(sse_type, payload)
 
     return {"status": "ok", "session_id": event.session_id, "sse_emitted": sse_type}
+
+
+@router.post("/api/observe/network")
+async def observe_network(
+    call: NetworkCall,
+    db: Session = Depends(get_session),
+):
+    """Receive a network call captured from the host app's fetch/XHR.
+
+    capture.js wraps window.fetch and XMLHttpRequest in the host page and
+    POSTs each non-self call here. The records become ground truth for
+    SpecBuilder + NarrowAgent — site-agnostic replacement for /api/stubs/*.
+    """
+    stored = network_capture_service.record(call, db)
+    return {"status": "ok" if stored else "skipped"}

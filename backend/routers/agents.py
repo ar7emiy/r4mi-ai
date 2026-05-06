@@ -63,6 +63,8 @@ async def build_spec(
             "name": spec.name,
             "description": spec.description,
             "permit_type": spec.permit_type,
+            "cluster_id": spec.cluster_id,
+            "cluster_label": spec.cluster_label,
             "trigger_pattern": spec.trigger_pattern,
             "action_sequence": spec.action_sequence,
             "knowledge_sources": spec.knowledge_sources,
@@ -81,6 +83,8 @@ async def build_spec(
             "name": spec.name,
             "description": spec.description,
             "permit_type": spec.permit_type,
+            "cluster_id": spec.cluster_id,
+            "cluster_label": spec.cluster_label,
             "action_sequence": spec.action_sequence,
             "knowledge_sources": spec.knowledge_sources,
         },
@@ -231,6 +235,8 @@ async def tune_agent(
         "id": forked.id,
         "name": forked.name,
         "permit_type": forked.permit_type,
+        "cluster_id": forked.cluster_id,
+        "cluster_label": forked.cluster_label,
         "trust_level": forked.trust_level,
         "contributions": forked.contributions,
         "parent_spec_id": forked.parent_spec_id,
@@ -275,7 +281,10 @@ def log_correction(
 
 class PreviewRequest(BaseModel):
     session_id: str
-    application_id: str = "PRM-2024-0041"
+    # application_id is no longer required: in the site-agnostic model, the
+    # session itself owns the captured network_calls that NarrowAgent uses
+    # to resolve FETCH steps. Kept as an optional string for legacy callers.
+    application_id: Optional[str] = None
 
 
 @router.post("/api/agents/preview")
@@ -285,11 +294,11 @@ async def preview_agent(
 ):
     """Resolve step values without persisting — for HITL replay preview.
 
-    Returns each step with its resolved value, source tag, and the host
-    page screen the user should see during replay.
+    Backend dry-runs the spec against the session's captured network_calls
+    (no host-side data, no domain stubs). FETCH steps return the response
+    body the worker observed; READ/WRITE return placeholders that the host
+    page resolves at agent run time via element_resolver.js.
     """
-    import pathlib
-
     record = db.get(SessionRecord, body.session_id)
     if not record:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -298,45 +307,14 @@ async def preview_agent(
     if not draft:
         raise HTTPException(status_code=400, detail="No spec draft — build first")
 
-    seed_path = pathlib.Path(__file__).parent.parent / "seed" / "applications.json"
-    applications = json.loads(seed_path.read_text())
-    application = next(
-        (a for a in applications if a["application_id"] == body.application_id), {}
-    )
-
-    from agents.narrow_agent import NarrowAgent
-    agent = NarrowAgent()
-
-    resolved_zone = "R-2"
-    resolved_steps = []
-    for step_def in (draft.get("action_sequence") or []):
-        result = await agent._execute_step(
-            step_def, application, draft.get("knowledge_sources", []), resolved_zone
-        )
-        field = step_def.get("field", "").lower()
-        if field == "zone_classification" and result.get("value"):
-            resolved_zone = result["value"]
-
-        # Map step to host page screen based on source
-        source = step_def.get("source", "").lower()
-        if "gis" in source or "parcel" in source:
-            screen = "gis"
-        elif "§" in step_def.get("source", "") or "pdf" in source or "policy" in source or "municipal" in source:
-            screen = "policy"
-        else:
-            screen = "form"
-
-        resolved_steps.append({
-            **step_def,
-            "value": result.get("value", ""),
-            "source_tag": result.get("source_tag", step_def.get("source", "")),
-            "confidence": result.get("confidence", 0.5),
-            "screen": screen,
-        })
+    resolved_steps = await narrow_agent.dry_run(draft, record)
 
     return {
         "spec_name": draft.get("name", ""),
         "spec_description": draft.get("description", ""),
+        "cluster_id": draft.get("cluster_id"),
+        "cluster_label": draft.get("cluster_label"),
+        # legacy alias kept for older sidebar code paths
         "permit_type": draft.get("permit_type", ""),
         "steps": resolved_steps,
         "knowledge_sources": draft.get("knowledge_sources", []),
@@ -346,31 +324,43 @@ async def preview_agent(
 @router.post("/api/agents/{spec_id}/run")
 async def run_agent(
     spec_id: str,
-    application_id: str,
+    session_id: Optional[str] = None,
+    application_id: Optional[str] = None,  # deprecated alias; ignored
     db: Session = Depends(get_session),
 ):
-    """Run a published agent. Broadcasts steps via SSE bus; returns immediately."""
-    import pathlib
+    """Run a published agent. Broadcasts steps via SSE bus; returns immediately.
+
+    The agent draws its FETCH responses from the source session's captured
+    network_calls. Pass session_id (preferred) — the legacy application_id
+    parameter is accepted but ignored.
+    """
     spec = db.get(NarrowAgentSpec, spec_id)
     if not spec:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    seed_path = pathlib.Path(__file__).parent.parent / "seed" / "applications.json"
-    applications = json.loads(seed_path.read_text())
-    application = next(
-        (a for a in applications if a["application_id"] == application_id), {}
-    )
+    # Pick which session's captured context to draw from. Preferred:
+    # explicit session_id from the caller. Fallback: spec.source_session_id.
+    src_session_id = session_id or spec.source_session_id
+    src_session = db.get(SessionRecord, src_session_id) if src_session_id else None
 
     async def _run():
         from sqlmodel import Session as DBSession
         from db import engine
         with DBSession(engine) as task_db:
             task_spec = task_db.get(NarrowAgentSpec, spec_id)
-            async for payload in narrow_agent.execute(task_spec, application, task_db):
+            task_session = (
+                task_db.get(SessionRecord, src_session_id) if src_session_id else None
+            )
+            async for payload in narrow_agent.execute(task_spec, task_session, task_db):
                 await sse_bus.publish(payload["event"], payload["data"])
             apply_trust_transition(task_spec)
             task_db.add(task_spec)
             task_db.commit()
 
     asyncio.create_task(_run())
-    return {"status": "running", "spec_id": spec_id}
+    return {
+        "status": "running",
+        "spec_id": spec_id,
+        "session_id": src_session_id,
+        "context_present": src_session is not None,
+    }

@@ -20,12 +20,20 @@ def get_evidence(session_id: str, db: Session = Depends(get_session)):
     if not target:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    all_sessions = db.exec(
-        select(SessionRecord).where(
-            SessionRecord.permit_type == target.permit_type,
-            SessionRecord.completed_at != None,
-        )
-    ).all()
+    # Site-agnostic: peer sessions are grouped by discovered cluster_id
+    # (replaces the legacy permit_type filter). If the target hasn't been
+    # clustered yet, fall back to "all completed sessions".
+    if target.cluster_id:
+        all_sessions = db.exec(
+            select(SessionRecord).where(
+                SessionRecord.cluster_id == target.cluster_id,
+                SessionRecord.completed_at != None,
+            )
+        ).all()
+    else:
+        all_sessions = db.exec(
+            select(SessionRecord).where(SessionRecord.completed_at != None)
+        ).all()
 
     sessions_out = []
     for s in all_sessions:
@@ -55,7 +63,9 @@ def get_evidence(session_id: str, db: Session = Depends(get_session)):
 
     return {
         "target_session_id": session_id,
-        "permit_type": target.permit_type,
+        "cluster_id": target.cluster_id,
+        "cluster_label": target.cluster_label,
+        "permit_type": target.permit_type,  # legacy
         "sessions": sessions_out,
         "similarity_matrix": matrix,
         "similarity_threshold": threshold,

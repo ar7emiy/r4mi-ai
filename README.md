@@ -136,7 +136,7 @@ cd e2e
 npx playwright test health
 ```
 
-Verifies backend is alive, seed data is loaded (9 applications, 2 prior sessions), and the frontend renders the Application Inbox. Runs in ~5 seconds.
+Verifies backend is alive, the example permit-app host is serving its self-contained mock API at `/api/stubs/*`, and the frontend renders the Application Inbox. Runs in ~5 seconds.
 
 ### Full Integration Test
 
@@ -149,15 +149,17 @@ Walks through the complete end-to-end flow in a single browser session:
 
 | Step | What it validates |
 |------|-------------------|
-| 1 — Intake Work        | Worker navigates inbox → GIS lookup → Policy Reference → submits form |
-| 2 — Pattern Detection  | Gemini embedding fires; optimization badge appears via SSE (≤45s) |
-| 3 — Session Replay     | Observed workflow replays with `from GIS API` / `from PDF §14.3` source tags |
-| 4 — Correction         | Worker redirects knowledge source; spec regenerated via Gemini (≤45s) |
-| 5 — Publish            | HITL validation → agent published to Agentverse |
-| 6 — Automation         | New case opens; published agent auto-fills zone classification and height fields |
-| 7 — Agentverse         | Agent card shows trust level (SUPERVISED) and run count |
+| 1 — Intake Work        | Worker navigates the example host (permit-app) end-to-end; capture.js fingerprints every event AND wraps fetch/XHR for ground truth |
+| 2 — Pattern Detection  | Gemini embedding fires; cluster_service assigns a workflow cluster; OPTIMIZATION_OPPORTUNITY SSE → sidebar badge (≤60s) |
+| 3 — Session Replay     | SpecBuilder generates a 5-action spec (READ/FETCH/REASON/WRITE/ASSERT) from the trace + captured network calls |
+| 4 — HITL approval      | Worker walks each step through approve/correct; element_resolver locates targets via accessible name + role |
+| 5 — Publish            | Spec published to Agentverse with auto-generated cluster_label |
+| 6 — Automation         | New case opens; published agent dry-runs against captured network calls and writes to fingerprinted form fields |
+| 7 — Agentverse         | Agent card shows SUPERVISED trust badge and discovered cluster label |
 
 **Expected duration:** 20–90 seconds depending on Gemini API latency.
+
+**Required env for the test:** `MIN_CLUSTER_SIZE=1` on the backend so a single fresh session crosses the cluster threshold immediately. (Default in production is 3.)
 
 ### Run a Specific Step
 

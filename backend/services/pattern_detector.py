@@ -1,41 +1,42 @@
+"""Site-agnostic pattern detection.
+
+Replaces the previous permit_type-filtered comparison. Flow on session
+complete:
+
+    1. Embed the trace.
+    2. Check the published agent market — if a published spec already
+       matches this trace by cosine similarity, fire AGENT_MATCH_FOUND.
+    3. Otherwise assign a cluster via cluster_service. Clusters are
+       discovered greedily by cosine similarity over all completed sessions.
+    4. If the cluster crosses MIN_CLUSTER_SIZE (default 3) for the first
+       time, fire OPTIMIZATION_OPPORTUNITY and pre-generate a draft spec.
+    5. Else fire PATTERN_CANDIDATE.
+"""
 from __future__ import annotations
 import asyncio
-import os
 from typing import Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from models.session import SessionRecord, PatternState
-from models.agent_spec import NarrowAgentSpec, TrustLevel
 from models.event import ActionTrace, UIEvent, SSEEventType
+from services.cluster_service import cluster_service
 from services.embedding_service import embedding_service
 from services.log_streamer import logger
 from agents.market_matcher import market_matcher
 
-PATTERN_THRESHOLD = int(os.getenv("PATTERN_THRESHOLD", "3"))
-PATTERN_CONFIDENCE_MIN = float(os.getenv("PATTERN_CONFIDENCE_MIN", "0.85"))
-
 
 class PatternDetector:
-    """
-    Manages the 10-stage state machine per permit_type.
-    Stage transitions happen here; SSE broadcasting happens in the router.
-    """
-
     async def process_session_complete(
         self,
         session: SessionRecord,
         db: Session,
     ) -> Optional[str]:
-        """
-        Called when a session is marked complete. Embeds the trace, compares
-        against prior completed sessions for the same permit_type, and advances
-        state. Returns SSEEventType string if an event should be broadcast.
-        """
+        """Embed, cluster, and optionally trigger an opportunity SSE event."""
         trace = ActionTrace(
             session_id=session.session_id,
             user_id=session.user_id,
-            permit_type=session.permit_type,
+            permit_type=session.permit_type or "",
             events=[UIEvent(**e) for e in session.events],
             completed_at=session.completed_at,
         )
@@ -49,113 +50,55 @@ class PatternDetector:
         db.add(session)
         db.commit()
 
-        # Compare against prior completed sessions (same permit_type, not seeded context)
-        prior_sessions = db.exec(
-            select(SessionRecord).where(
-                SessionRecord.permit_type == session.permit_type,
-                SessionRecord.session_id != session.session_id,
-                SessionRecord.completed_at != None,
+        # 1. Market check — does an existing published agent already cover this?
+        logger.info("[MarketMatcher] Checking published agents for existing match...")
+        match_result = await market_matcher.find_match_by_vector(vector, db)
+        if match_result:
+            matched_spec, match_score = match_result
+            logger.info(
+                f"[SSE] → AGENT_MATCH_FOUND | spec='{matched_spec.name}' "
+                f"score={match_score} trust={matched_spec.trust_level}"
             )
-        ).all()
+            session.matched_spec_id = matched_spec.id
+            session.state = PatternState.READY
+            db.add(session)
+            db.commit()
+            return SSEEventType.AGENT_MATCH_FOUND
 
-        logger.info(
-            f"[Similarity] Comparing against {len(prior_sessions)} prior sessions "
-            f"(permit_type={session.permit_type})"
-        )
-
+        # 2. Cluster discovery — replaces the permit_type filter.
         session.state = PatternState.COMPARING
         db.add(session)
         db.commit()
 
-        matches = 0
-        for prior in prior_sessions:
-            if not prior.embedding:
-                continue
-            score = embedding_service.cosine_similarity(vector, prior.embedding)
-            threshold = PATTERN_CONFIDENCE_MIN
-            flag = "✓" if score >= threshold else "✗"
-            logger.info(
-                f"[Similarity] vs {prior.session_id}: cosine={score} {flag} "
-                f"(threshold: {threshold})"
-            )
-            if score >= threshold:
-                matches += 1
-
-        total_sessions = len(prior_sessions) + 1  # include current
+        assignment = await cluster_service.assign_cluster(session, db)
         logger.info(
-            f"[Detector]  Pattern matches: {matches}/{len(prior_sessions)} "
-            f"sessions exceed similarity threshold"
+            f"[Detector] Cluster {assignment.cluster_id[:8]} | size={assignment.cluster_size} "
+            f"| label={assignment.cluster_label!r}"
         )
 
-        if total_sessions >= PATTERN_THRESHOLD and matches >= PATTERN_THRESHOLD - 1:
+        if assignment.crossed_threshold:
             session.state = PatternState.READY
             db.add(session)
             db.commit()
-            logger.info(
-                f"[Detector]  Pattern READY — {matches}/{len(prior_sessions)} sessions "
-                f"exceed similarity threshold"
-            )
-
-            # Market-first: check for an existing published agent before building.
-            # Try vector similarity first; fall back to permit_type match if no
-            # vector match (trace vs spec text embeddings may diverge).
-            logger.info("[MarketMatcher] Checking published agents for existing match...")
-            match_result = await market_matcher.find_match_by_vector(vector, db)
-            if not match_result:
-                # Fallback: any non-stale published agent for the same permit_type
-                existing = db.exec(
-                    select(NarrowAgentSpec).where(
-                        NarrowAgentSpec.permit_type == session.permit_type,
-                        NarrowAgentSpec.trust_level != TrustLevel.STALE,
-                    )
-                ).first()
-                if existing:
-                    score = (
-                        embedding_service.cosine_similarity(vector, existing.embedding)
-                        if existing.embedding
-                        else 0.0
-                    )
-                    match_result = (existing, score)
-                    logger.info(
-                        f"[MarketMatcher] Permit-type fallback match: "
-                        f"spec='{existing.name}' score={score}"
-                    )
-
-            if match_result:
-                matched_spec, match_score = match_result
-                logger.info(
-                    f"[SSE]       → AGENT_MATCH_FOUND | spec='{matched_spec.name}' "
-                    f"score={match_score} trust={matched_spec.trust_level}"
-                )
-                session.matched_spec_id = matched_spec.id
-                db.add(session)
-                db.commit()
-                return SSEEventType.AGENT_MATCH_FOUND
-
-            logger.info(f"[SSE]       → OPTIMIZATION_OPPORTUNITY sent to frontend")
-            # Kick off spec pre-generation so the panel has a draft ready immediately
+            logger.info("[SSE] → OPTIMIZATION_OPPORTUNITY sent to frontend")
             asyncio.create_task(_pre_generate_spec(session.session_id))
             return SSEEventType.OPTIMIZATION_OPPORTUNITY
-        else:
-            session.state = PatternState.CANDIDATE
-            db.add(session)
-            db.commit()
-            logger.info(
-                f"[Detector]  Pattern CANDIDATE — need more sessions "
-                f"({total_sessions}/{PATTERN_THRESHOLD})"
-            )
-            return SSEEventType.PATTERN_CANDIDATE
+
+        session.state = PatternState.CANDIDATE
+        db.add(session)
+        db.commit()
+        logger.info(
+            f"[Detector] Pattern CANDIDATE — cluster {assignment.cluster_id[:8]} "
+            f"size {assignment.cluster_size}/{cluster_service.__class__.__module__}"
+        )
+        return SSEEventType.PATTERN_CANDIDATE
 
 
 pattern_detector = PatternDetector()
 
 
 async def _pre_generate_spec(session_id: str) -> None:
-    """
-    Background task: build a NarrowAgentSpec draft from the completed session and
-    store it on SessionRecord.candidate_spec_draft. Fires SPEC_GENERATED SSE when done.
-    Uses its own DB session — safe to run after the originating request has completed.
-    """
+    """Background task: build a NarrowAgentSpec draft and persist it on the session."""
     from db import engine  # avoid circular at module level
     from agents.spec_builder_agent import spec_builder_agent
     from services.sse_bus import sse_bus
@@ -165,11 +108,9 @@ async def _pre_generate_spec(session_id: str) -> None:
         with Session(engine) as db:
             session = db.get(SessionRecord, session_id)
             if not session:
-                logger.warning(f"[SpecBuilder] Session {session_id} not found for pre-generation")
+                logger.warning(f"[SpecBuilder] Session {session_id} not found")
                 return
-
             spec = await spec_builder_agent.build_spec(session)
-
             session.candidate_spec_draft = spec.model_dump(mode="json")
             db.add(session)
             db.commit()

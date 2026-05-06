@@ -17,23 +17,45 @@ interface LogEntry {
 
 interface DetectedData {
   session_id: string
-  permit_type: string
+  // Site-agnostic: cluster_label is the discovered workflow name. permit_type
+  // stays as a legacy field for older payloads.
+  cluster_id?: string | null
+  cluster_label?: string | null
+  permit_type?: string
   match_count: number
   scores?: Array<{ session: string; score: number }>
+}
+
+interface ElementFingerprint {
+  role: string
+  accessible_name: string
+  landmark?: string
+  surrounding_text?: string
+  position_signature?: string
+  url_pattern?: string
+}
+
+interface SourceFetch {
+  method: string
+  url_template: string
+  expected_status?: number
+  response_jsonpath?: string
 }
 
 interface SpecData {
   id?: string
   name: string
   description: string
-  permit_type: string
+  cluster_id?: string | null
+  cluster_label?: string | null
+  permit_type?: string  // legacy
   action_sequence: Array<{
     step: number
     action: string
     description: string
-    field: string
-    value?: string
-    source: string
+    target_fingerprint?: ElementFingerprint | null
+    source_fetch?: SourceFetch | null
+    value_template?: string
   }>
   knowledge_sources: Array<{
     type: string
@@ -140,7 +162,9 @@ export function SidebarApp() {
           if (event === 'OPTIMIZATION_OPPORTUNITY') {
             const d: DetectedData = {
               session_id: payload.session_id as string,
-              permit_type: payload.permit_type as string ?? 'unknown',
+              cluster_id: payload.cluster_id as string | null,
+              cluster_label: payload.cluster_label as string | null,
+              permit_type: payload.permit_type as string,
               match_count: payload.match_count as number ?? 3,
               scores: payload.scores as DetectedData['scores'],
             }
@@ -148,7 +172,7 @@ export function SidebarApp() {
             if (phaseRef.current === 'idle') {
               setPhase('detected')
             }
-            log(`pattern detected: ${d.permit_type} (${d.match_count} matches)`, 'success')
+            log(`pattern detected: ${d.cluster_label || d.permit_type || 'workflow'} (${d.match_count} matches)`, 'success')
           }
 
           if (event === 'AGENT_DEMO_STEP') {
@@ -494,8 +518,8 @@ export function SidebarApp() {
               <div style={sectionLabel}>── pattern detected ──</div>
               <div style={{ padding: '8px 0' }}>
                 <div style={kvRow}>
-                  <span style={kvKey}>permit_type:</span>
-                  <span style={kvVal}>{detected.permit_type}</span>
+                  <span style={kvKey}>workflow:</span>
+                  <span style={kvVal}>{detected.cluster_label || detected.permit_type || 'unknown'}</span>
                 </div>
                 <div style={kvRow}>
                   <span style={kvKey}>sessions:</span>

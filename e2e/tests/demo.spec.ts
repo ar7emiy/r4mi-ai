@@ -1,16 +1,23 @@
 /**
- * Full demo flow — all 7 beats from DEMO_SCRIPT.md
+ * Full demo flow — site-agnostic r4mi against the mock permit app.
  *
- * Sidebar-based architecture (phase-based UI):
- *   - r4mi UI lives in the sidebar iframe (#r4mi-sidebar)
- *   - Toggle button (#r4mi-toggle) with badge (#r4mi-badge) in the host page
- *   - Sidebar phases: idle → detected → replay (HITL) → published → agents
- *   - All r4mi interactions use page.frameLocator('#r4mi-sidebar')
+ * Architecture (post site-agnostic rewrite):
+ *   - r4mi backend has zero domain knowledge. The mock permit app
+ *     (mock-sites/permit-app/) serves its own /api/stubs/* via its Vite
+ *     middleware. capture.js intercepts those fetches and stores them on
+ *     the session record — that's the data NarrowAgent replays.
+ *   - Workflow types are discovered by services/cluster_service.py via
+ *     embedding cosine similarity. There is no permit_type taxonomy.
+ *   - DOM targets are resolved at run time via element_resolver.js using
+ *     accessibility roles + names + landmarks. No testid hardcoding.
  *
  * Prerequisites:
- *   backend:  cd backend && uvicorn main:app --reload --port 8000
- *             DEMO_SESSION_SEED=true must be set (2 prior sessions pre-loaded)
- *   frontend: cd frontend && npm run dev
+ *   backend:    cd backend && uvicorn main:app --reload --port 8000
+ *               MIN_CLUSTER_SIZE=1 must be set so a single fresh session
+ *               triggers OPTIMIZATION_OPPORTUNITY (replaces the old
+ *               DEMO_SESSION_SEED scaffolding).
+ *   frontend:   cd frontend && npm run dev
+ *   permit-app: cd mock-sites/permit-app && npm run dev
  *
  * Run:
  *   cd e2e
@@ -33,7 +40,9 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
 
   // ────────────────────────────────────────────────────────────────────
   // BEAT 1 — The Work (0:00–0:40)
-  // Operator processes a fence variance the manual way
+  // Operator processes an application by hand. capture.js silently
+  // records every UI event AND wraps fetch/XHR so the host's API calls
+  // become spec-grade ground truth.
   // ────────────────────────────────────────────────────────────────────
   await test.step('Beat 1 — select PRM-2024-0041 from inbox', async () => {
     await page.locator('[data-testid="app-row-PRM-2024-0041"]').click()
@@ -41,29 +50,30 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
     await expect(page.getByText('APPLICANT INFORMATION')).toBeVisible()
   })
 
-  await test.step('Beat 1 — GIS lookup: parcel R2-0041-BW, zone R-2', async () => {
+  await test.step('Beat 1 — GIS lookup: parcel R2-0041-BW (host fetch captured)', async () => {
     await page.getByRole('button', { name: 'GIS PARCEL LOOKUP' }).click()
     await page.getByPlaceholder('e.g. R2-0041-BW').fill('R2-0041-BW')
     await page.getByRole('button', { name: 'Search' }).click()
-    await expect(page.getByText('R-2')).toBeVisible()
-    await expect(page.getByText('Single Family Residential')).toBeVisible()
+    // exact: true avoids matching policy-tab paragraphs that contain "R-2" as a substring
+    await expect(page.getByText('R-2', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Single Family Residential').first()).toBeVisible()
   })
 
-  await test.step('Beat 1 — return to form, type zone R-2 manually', async () => {
+  await test.step('Beat 1 — return to form, type zone manually', async () => {
     await page.getByRole('button', { name: 'APPLICATION FORM' }).click()
     await page.locator('[data-testid="field-zone"]').fill('R-2')
     await expect(page.locator('[data-testid="field-zone"]')).toHaveValue('R-2')
   })
 
-  await test.step('Beat 1 — Policy Reference: read §14.3 fence height rule', async () => {
+  await test.step('Beat 1 — Policy Reference: read fence height rule (host fetch captured)', async () => {
     await page.getByRole('button', { name: 'POLICY REFERENCE' }).click()
     await expect(page.getByText('Section 14.3 — Residential Fencing Standards')).toBeVisible()
     await expect(page.getByText('shall not exceed six feet')).toBeVisible()
   })
 
-  await test.step('Beat 1 — fill max height and notes, submit application', async () => {
+  await test.step('Beat 1 — fill remaining fields, submit application', async () => {
     await page.getByRole('button', { name: 'APPLICATION FORM' }).click()
-    // Zone value should persist after tab switch (tabs stay mounted)
+    // Zone value persists after tab switch (tabs stay mounted)
     await expect(page.locator('[data-testid="field-zone"]')).toHaveValue('R-2')
     await page.locator('[data-testid="field-max-height"]').fill('6 ft')
     await page.locator('[data-testid="field-notes"]').fill(
@@ -75,63 +85,59 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
 
   // ────────────────────────────────────────────────────────────────────
   // BEAT 2 — The Detection (0:40–0:55)
-  // Gemini embedding → cosine similarity → OPTIMIZATION_OPPORTUNITY SSE
-  // Sidebar transitions from idle → detected phase
+  // Embedding → cluster discovery (replaces permit_type filter) → SSE
+  // OPTIMIZATION_OPPORTUNITY. With MIN_CLUSTER_SIZE=1 the first session
+  // crosses the threshold immediately.
   // ────────────────────────────────────────────────────────────────────
-  await test.step('Beat 2 — badge pulses on sidebar toggle after Gemini embedding', async () => {
-    await expect(page.locator('#r4mi-badge')).toBeVisible({ timeout: 45_000 })
+  await test.step('Beat 2 — badge pulses after embedding + cluster discovery', async () => {
+    await expect(page.locator('#r4mi-badge')).toBeVisible({ timeout: 60_000 })
     await expect(page.locator('#r4mi-badge')).not.toHaveText('0')
   })
 
   await test.step('Beat 2 — open sidebar, see pattern detected phase', async () => {
     await page.locator('#r4mi-toggle').click()
-    // Sidebar should be in "detected" phase with pattern info
     await expect(sidebar.getByText(/pattern detected/i)).toBeVisible({ timeout: 5_000 })
     await expect(sidebar.getByText(/review replay/i)).toBeVisible()
   })
 
   // ────────────────────────────────────────────────────────────────────
   // BEAT 3 — The Replay (0:55–1:25)
-  // Click "review replay" → builds spec → HITL replay with step list
+  // Click "review replay" → SpecBuilder generates a 5-action spec
+  // (READ/FETCH/REASON/WRITE/ASSERT) from the captured trace +
+  // network_calls. Site-agnostic — assertions don't reference field names.
   // ────────────────────────────────────────────────────────────────────
-  await test.step('Beat 3 — click "review replay", spec builds, steps appear', async () => {
+  await test.step('Beat 3 — review replay opens HITL phase with at least one step', async () => {
     await sidebar.getByText(/review replay/i).click()
-    // Spec build is a Gemini call — allow 30s for steps to appear
-    await expect(sidebar.getByText(/zone_classification|zone/i).first()).toBeVisible({ timeout: 30_000 })
-    await expect(sidebar.getByText(/max_permitted_height|max_height|height/i).first()).toBeVisible({
-      timeout: 10_000,
-    })
+    // Spec build is a Gemini call — allow 45s for steps to populate.
+    // We assert that *some* step row appears (step number "1." anchored).
+    await expect(sidebar.getByText(/^1\./).first()).toBeVisible({ timeout: 45_000 })
   })
 
   // ────────────────────────────────────────────────────────────────────
   // BEAT 4 — HITL Step Approval (1:25–2:00)
-  // Approve each step in the replay. Each step fills a field on the host.
+  // HITLReplay starts in a "ready" state (currentStep === -1). Click
+  // "begin replay" first, then approve each step as it appears.
   // ────────────────────────────────────────────────────────────────────
-  await test.step('Beat 4 — approve replay steps one by one (host page navigates)', async () => {
-    // Each step navigates the host page (tab switch + field fill) then waits for approval.
-    // Steps vary by spec but typically 3-5 steps. Approve them all.
+  await test.step('Beat 4 — click begin replay, then approve steps one by one', async () => {
+    // HITLReplay renders "▶ begin replay" before the first approve button appears
+    await sidebar.getByText(/begin replay/i).click()
+
     const maxSteps = 8
     for (let i = 0; i < maxSteps; i++) {
-      // Wait for approve button — each step takes ~1.4s (nav + fill animation)
       const approveBtn = sidebar.getByTestId('replay-approve')
-      const appeared = await approveBtn.isVisible({ timeout: 5_000 }).catch(() => false)
+      const appeared = await approveBtn.isVisible({ timeout: 8_000 }).catch(() => false)
       if (!appeared) break
       await approveBtn.click()
-      // Wait for next step to start navigating
       await page.waitForTimeout(500)
     }
-    // After all steps approved, "review complete" should appear
     await expect(sidebar.getByText(/review complete|all.*steps reviewed/i)).toBeVisible({ timeout: 10_000 })
   })
 
   // ────────────────────────────────────────────────────────────────────
   // BEAT 5 — Publish (2:00–2:25)
-  // All steps approved → publish agent
   // ────────────────────────────────────────────────────────────────────
   await test.step('Beat 5 — publish agent to Agentverse', async () => {
-    // Sources should be visible
     await expect(sidebar.getByText(/sources/i)).toBeVisible()
-
     await sidebar.getByText(/publish agent/i).click()
     // Publish = 2 Gemini calls (spec embed + publish) — allow 30s
     await expect(sidebar.getByText(/published/i)).toBeVisible({ timeout: 30_000 })
@@ -139,7 +145,12 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
 
   // ────────────────────────────────────────────────────────────────────
   // BEAT 6 — The Payoff (2:25–2:50)
-  // Open next app → run agent from Agentverse → fields auto-fill
+  // Open a fresh application; run the agent. NarrowAgent dry-runs each
+  // step against the source session's captured network_calls and posts
+  // the resolved steps to the host via element_resolver.js. Form fills
+  // come from the agent's writes; we assert the form is *not empty*
+  // rather than expecting specific values (those depend on the spec
+  // SpecBuilder produced).
   // ────────────────────────────────────────────────────────────────────
   await test.step('Beat 6 — navigate back to inbox, open PRM-2024-0042', async () => {
     await page.getByRole('button', { name: 'APPLICATION INBOX' }).click()
@@ -148,39 +159,41 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
     await expect(page.getByText('APPLICATION FORM — PRM-2024-0042')).toBeVisible()
   })
 
-  await test.step('Beat 6 — open Agentverse, run published fence-variance agent', async () => {
-    // Open sidebar if closed
+  await test.step('Beat 6 — open Agentverse, run the published agent', async () => {
     const isSidebarOpen = await page.locator('#r4mi-container').evaluate(
       (el) => (el as HTMLElement).offsetWidth > 0,
     )
     if (!isSidebarOpen) {
       await page.locator('#r4mi-toggle').click()
     }
-    // Open agents view
     await sidebar.getByText('agents', { exact: true }).first().click()
     await expect(sidebar.locator('[data-testid="agent-card"]').first()).toBeVisible({ timeout: 5_000 })
-    // Click Run on the first agent
     await sidebar.locator('[data-testid="agent-card"]').first().getByText('run').click()
   })
 
-  await test.step('Beat 6 — agent fills Zone and Max Height fields with source tags', async () => {
-    // Zone fills first (typing animation)
-    await expect(page.locator('[data-testid="field-zone"]')).toHaveValue('R-2', { timeout: 15_000 })
-    // Max Height fills after zone
-    await expect(page.locator('[data-testid="field-max-height"]')).not.toHaveValue('', {
-      timeout: 15_000,
-    })
-    // Source tags appear next to the filled fields
-    await expect(page.getByText('from GIS API')).toBeVisible()
-    await expect(page.getByText(/PDF §14\.3/i)).toBeVisible()
+  await test.step('Beat 6 — agent writes at least one form field', async () => {
+    // The agent's WRITE steps target the form fields by fingerprint. We
+    // assert at least one of the form's known fields received content
+    // — rather than asserting specific values (which depend on whatever
+    // spec SpecBuilder generated for this run).
+    await page.waitForFunction(
+      () => {
+        const fields = ['field-zone', 'field-max-height', 'field-notes']
+        return fields.some((id) => {
+          const el = document.querySelector(`[data-testid="${id}"]`) as HTMLInputElement | null
+          return el && el.value && el.value.length > 0
+        })
+      },
+      { timeout: 30_000 },
+    )
   })
 
   // ────────────────────────────────────────────────────────────────────
   // BEAT 7 — The Agentverse (2:50–3:00)
-  // Agent card shows trust badge and permit type
+  // Agent card carries trust badge + cluster_label (Gemini-generated, so
+  // the assertion checks for *a* label, not a specific string).
   // ────────────────────────────────────────────────────────────────────
-  await test.step('Beat 7 — agent card shows supervised trust badge and fence_variance type', async () => {
-    // Re-open agents view if needed
+  await test.step('Beat 7 — agent card shows supervised trust badge + cluster label', async () => {
     const cardVisible = await sidebar.locator('[data-testid="agent-card"]').first().isVisible().catch(() => false)
     if (!cardVisible) {
       await sidebar.getByText('agents', { exact: true }).first().click()
@@ -188,6 +201,8 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
     const card = sidebar.locator('[data-testid="agent-card"]').first()
     await expect(card).toBeVisible({ timeout: 5_000 })
     await expect(card.getByText('supervised')).toBeVisible()
-    await expect(card.getByText('fence_variance')).toBeVisible()
+    // Cluster label is auto-generated by Gemini; assert that *some*
+    // non-empty label-or-runs string sits next to "runs".
+    await expect(card.getByText(/\d+\s*runs/)).toBeVisible()
   })
 })

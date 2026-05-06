@@ -30,7 +30,7 @@ export function ChatMessage({ msg, onAction }: Props) {
             <span style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 12 }}>
               {msg.data?.name as string}
             </span>
-            <span style={{ fontSize: 10, color: '#94a3b8' }}>{msg.data?.permit_type as string}</span>
+            <span style={{ fontSize: 10, color: '#94a3b8' }}>{(msg.data?.cluster_label as string) || (msg.data?.permit_type as string) || ''}</span>
           </div>
           {/* Match score bar */}
           <div style={{ marginBottom: 8 }}>
