@@ -16,7 +16,14 @@ from services.log_streamer import logger
 
 router = APIRouter()
 
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
+_client: genai.Client | None = None
+
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    return _client
 
 SYSTEM_PROMPT = """You are r4mi-ai, an AI assistant embedded in a municipal permit processing system.
 You help permit technicians by:
@@ -73,7 +80,7 @@ User message: {body.message}"""
 
     t0 = time.time()
     try:
-        response = await client.aio.models.generate_content(
+        response = await _get_client().aio.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt,
         )
