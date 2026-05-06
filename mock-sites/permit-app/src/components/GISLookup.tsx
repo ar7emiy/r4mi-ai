@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useR4miStore } from '../../store/r4mi.store'
+import { usePermit } from '../context/PermitContext'
 
 interface GISResult {
   parcel_id: string
@@ -19,7 +19,7 @@ export function GISLookup() {
   const [result, setResult] = useState<GISResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const demoMode = useR4miStore((s) => s.demoMode)
+  const { demoMode } = usePermit()
 
   async function handleSearch() {
     if (!parcelId.trim()) return
@@ -67,17 +67,11 @@ export function GISLookup() {
             <div style={subHeader}>PARCEL INFORMATION</div>
             <div
               style={{
-                border: '1px solid #999',
-                padding: 10,
-                fontFamily: 'monospace',
-                fontSize: 12,
-                background: '#fafafa',
-                lineHeight: 1.8,
+                border: '1px solid #999', padding: 10, fontFamily: 'monospace',
+                fontSize: 12, background: '#fafafa', lineHeight: 1.8,
               }}
             >
-              <div>
-                <strong>Parcel ID:</strong> {result.parcel_id}
-              </div>
+              <div><strong>Parcel ID:</strong> {result.parcel_id}</div>
               <div>
                 <strong>Zone Classification:</strong>{' '}
                 <span style={{ color: '#003478', fontWeight: 'bold' }}>
@@ -85,56 +79,23 @@ export function GISLookup() {
                 </span>{' '}
                 ({result.zone_description})
               </div>
-              {result.lot_size_sqft && (
-                <div>
-                  <strong>Lot Size:</strong> {result.lot_size_sqft.toLocaleString()} sq ft
-                </div>
-              )}
-              {result.setback_rear_ft && (
-                <div>
-                  <strong>Setback (rear):</strong> {result.setback_rear_ft} ft
-                </div>
-              )}
-              {result.building_frontage_ft && (
-                <div>
-                  <strong>Building Frontage:</strong> {result.building_frontage_ft} linear ft
-                </div>
-              )}
-              {result.year_built && (
-                <div>
-                  <strong>Year Built:</strong> {result.year_built}
-                </div>
-              )}
-              {result.structure_type && (
-                <div>
-                  <strong>Structure Type:</strong> {result.structure_type}
-                </div>
-              )}
+              {result.lot_size_sqft && <div><strong>Lot Size:</strong> {result.lot_size_sqft.toLocaleString()} sq ft</div>}
+              {result.setback_rear_ft && <div><strong>Setback (rear):</strong> {result.setback_rear_ft} ft</div>}
+              {result.building_frontage_ft && <div><strong>Building Frontage:</strong> {result.building_frontage_ft} linear ft</div>}
+              {result.year_built && <div><strong>Year Built:</strong> {result.year_built}</div>}
+              {result.structure_type && <div><strong>Structure Type:</strong> {result.structure_type}</div>}
               {result.adu_permitted !== null && result.adu_permitted !== undefined && (
-                <div>
-                  <strong>ADU Permitted:</strong> {result.adu_permitted ? 'Yes' : 'No'}
-                </div>
+                <div><strong>ADU Permitted:</strong> {result.adu_permitted ? 'Yes' : 'No'}</div>
               )}
-              {result.bedrooms && (
-                <div>
-                  <strong>Bedrooms:</strong> {result.bedrooms}
-                </div>
-              )}
+              {result.bedrooms && <div><strong>Bedrooms:</strong> {result.bedrooms}</div>}
             </div>
           </div>
 
           <div
             style={{
-              width: 240,
-              height: 180,
-              border: '1px solid #999',
-              background: '#d8d8d8',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#888',
-              fontSize: 12,
-              fontFamily: 'Arial',
+              width: 240, height: 180, border: '1px solid #999', background: '#d8d8d8',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#888', fontSize: 12, fontFamily: 'Arial',
             }}
           >
             [ MAP VIEW ]
@@ -145,11 +106,8 @@ export function GISLookup() {
       {demoMode && result && (
         <div
           style={{
-            marginTop: 12,
-            padding: 8,
-            border: '2px dashed #dc2626',
-            fontSize: 11,
-            color: '#dc2626',
+            marginTop: 12, padding: 8, border: '2px dashed #dc2626',
+            fontSize: 11, color: '#dc2626',
           }}
         >
           DEMONSTRATION MODE: Click on the data you want r4mi-ai to use as a source
@@ -160,26 +118,13 @@ export function GISLookup() {
 }
 
 const sectionHeader: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 'bold',
-  color: '#003478',
-  marginBottom: 10,
-  borderBottom: '2px solid #003478',
-  paddingBottom: 4,
+  fontSize: 13, fontWeight: 'bold', color: '#003478', marginBottom: 10,
+  borderBottom: '2px solid #003478', paddingBottom: 4,
 }
-
 const subHeader: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 'bold',
-  color: '#444',
-  marginBottom: 4,
-  textTransform: 'uppercase',
-  letterSpacing: 0.5,
+  fontSize: 11, fontWeight: 'bold', color: '#444', marginBottom: 4,
+  textTransform: 'uppercase', letterSpacing: 0.5,
 }
-
 const labelStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 'bold',
-  textTransform: 'uppercase',
-  letterSpacing: 0.3,
+  fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.3,
 }

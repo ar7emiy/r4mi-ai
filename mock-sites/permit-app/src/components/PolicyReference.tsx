@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useR4miStore } from '../../store/r4mi.store'
+import { usePermit } from '../context/PermitContext'
 
 const WIKI_SECTIONS = [
   {
@@ -39,10 +39,8 @@ Variance threshold: any fence exceeding zone maximum requires Planning Commissio
 export function PolicyReference() {
   const [activeTab, setActiveTab] = useState<'wiki' | 'pdf'>('wiki')
   const [highlightedSection, setHighlightedSection] = useState<string | null>(null)
-  const demoMode = useR4miStore((s) => s.demoMode)
-  const setDemoMode = useR4miStore((s) => s.setDemoMode)
+  const { demoMode, setDemoMode } = usePermit()
 
-  // Auto-switch to PDF tab when demo mode is activated (via "Show me" in correction flow)
   useEffect(() => {
     if (demoMode) setActiveTab('pdf')
   }, [demoMode])
@@ -50,7 +48,6 @@ export function PolicyReference() {
   function handlePDFParagraphClick(sectionId: string, content: string) {
     if (!demoMode) return
     setHighlightedSection(sectionId)
-    // Signal correction source selection
     window.dispatchEvent(
       new CustomEvent('r4mi:source-selected', {
         detail: { source_type: 'pdf', section: sectionId, content },
@@ -63,17 +60,13 @@ export function PolicyReference() {
     <div>
       <div style={sectionHeader}>POLICY REFERENCE MANUAL</div>
 
-      {/* Inner tabs */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderBottom: '1px solid #999' }}>
         {(['wiki', 'pdf'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setActiveTab(t)}
             style={{
-              padding: '3px 16px',
-              fontSize: 11,
-              fontWeight: 'bold',
-              fontFamily: 'Arial',
+              padding: '3px 16px', fontSize: 11, fontWeight: 'bold', fontFamily: 'Arial',
               background: activeTab === t ? '#fff' : '#e0e0e0',
               border: '1px solid #999',
               borderBottom: activeTab === t ? '1px solid #fff' : '1px solid #999',
@@ -91,26 +84,10 @@ export function PolicyReference() {
         <div>
           {WIKI_SECTIONS.map((section) => (
             <div key={section.id} style={{ marginBottom: 20 }}>
-              <h3
-                style={{
-                  fontSize: 13,
-                  fontWeight: 'bold',
-                  color: '#003478',
-                  marginBottom: 6,
-                  borderBottom: '1px solid #ccc',
-                  paddingBottom: 2,
-                }}
-              >
+              <h3 style={{ fontSize: 13, fontWeight: 'bold', color: '#003478', marginBottom: 6, borderBottom: '1px solid #ccc', paddingBottom: 2 }}>
                 {section.title}
               </h3>
-              <p
-                style={{
-                  fontSize: 12,
-                  lineHeight: 1.4,
-                  fontFamily: 'Arial',
-                  whiteSpace: 'pre-line',
-                }}
-              >
+              <p style={{ fontSize: 12, lineHeight: 1.4, fontFamily: 'Arial', whiteSpace: 'pre-line' }}>
                 {section.content}
               </p>
             </div>
@@ -121,17 +98,11 @@ export function PolicyReference() {
       {activeTab === 'pdf' && (
         <div
           style={{
-            background: '#fff',
-            border: '1px solid #ccc',
-            padding: 20,
-            maxHeight: 500,
-            overflowY: 'auto',
-            fontFamily: 'Arial',
+            background: '#fff', border: '1px solid #ccc', padding: 20,
+            maxHeight: 500, overflowY: 'auto', fontFamily: 'Arial',
           }}
         >
-          <div
-            style={{ textAlign: 'center', color: '#888', fontSize: 11, marginBottom: 16 }}
-          >
+          <div style={{ textAlign: 'center', color: '#888', fontSize: 11, marginBottom: 16 }}>
             MUNICIPAL CODE — Chapter 14: Land Use and Zoning Regulations | Page 4 of 128
           </div>
 
@@ -141,58 +112,27 @@ export function PolicyReference() {
               data-testid={`pdf-section-${section.id}`}
               onClick={() => handlePDFParagraphClick(section.id, section.content)}
               style={{
-                marginBottom: 24,
-                padding: 8,
+                marginBottom: 24, padding: 8,
                 cursor: demoMode ? 'pointer' : 'default',
-                background:
-                  highlightedSection === section.id
-                    ? '#fffacd'
-                    : demoMode
-                      ? '#fafff8'
-                      : '#fff',
-                border:
-                  highlightedSection === section.id
-                    ? '2px solid #6366f1'
-                    : demoMode
-                      ? '1px dashed #6366f1'
-                      : '1px solid transparent',
+                background: highlightedSection === section.id ? '#fffacd' : demoMode ? '#fafff8' : '#fff',
+                border: highlightedSection === section.id ? '2px solid #6366f1' : demoMode ? '1px dashed #6366f1' : '1px solid transparent',
                 transition: 'all 0.2s',
               }}
             >
-              <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
-                §{14 + i}.{i + 1}
-              </div>
-              <h4
-                style={{
-                  fontSize: 13,
-                  fontWeight: 'bold',
-                  color: '#000',
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>§{14 + i}.{i + 1}</div>
+              <h4 style={{ fontSize: 13, fontWeight: 'bold', color: '#000', marginBottom: 6 }}>
                 {section.title}
               </h4>
-              <p style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-line' }}>
-                {section.content}
-              </p>
+              <p style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-line' }}>{section.content}</p>
               {highlightedSection === section.id && (
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: 10,
-                    color: '#6366f1',
-                    fontWeight: 'bold',
-                  }}
-                >
+                <div style={{ marginTop: 6, fontSize: 10, color: '#6366f1', fontWeight: 'bold' }}>
                   ✓ Selected as knowledge source
                 </div>
               )}
             </div>
           ))}
 
-          <div style={{ textAlign: 'center', color: '#888', fontSize: 11, marginTop: 16 }}>
-            — Page 4 —
-          </div>
+          <div style={{ textAlign: 'center', color: '#888', fontSize: 11, marginTop: 16 }}>— Page 4 —</div>
         </div>
       )}
     </div>
@@ -200,10 +140,6 @@ export function PolicyReference() {
 }
 
 const sectionHeader: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 'bold',
-  color: '#003478',
-  marginBottom: 10,
-  borderBottom: '2px solid #003478',
-  paddingBottom: 4,
+  fontSize: 13, fontWeight: 'bold', color: '#003478', marginBottom: 10,
+  borderBottom: '2px solid #003478', paddingBottom: 4,
 }

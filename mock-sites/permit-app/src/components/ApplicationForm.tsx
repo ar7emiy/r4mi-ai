@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useR4miStore } from '../../store/r4mi.store'
-// Per-permit-type field configuration
+import { usePermit } from '../context/PermitContext'
+
 const PERMIT_CONFIG: Record<string, {
   constraintLabel: string
   constraintPlaceholder: string
@@ -27,7 +27,7 @@ function getPermitConfig(permitType?: string) {
 }
 
 export function ApplicationForm() {
-  const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
+  const { activeApplicationId } = usePermit()
   const { data: app } = useQuery({
     queryKey: ['application', activeApplicationId],
     queryFn: () =>
@@ -43,7 +43,6 @@ export function ApplicationForm() {
   const [notes, setNotes] = useState('')
   const [submitted, setSubmitted] = useState(false)
 
-  // Reset form state when switching to a different application
   useEffect(() => {
     setZone('')
     setMaxHeight('')
@@ -54,14 +53,10 @@ export function ApplicationForm() {
     setSubmitted(false)
   }, [activeApplicationId])
 
-
-
-
   async function handleSubmit() {
     if (!activeApplicationId) return
     const sessionId = `session_live_${Date.now()}`
 
-    // Post events to observer
     const permitType = app?.permit_type ?? 'general'
     const events = [
       { event_type: 'navigate', screen_name: 'APPLICATION_INBOX', element_selector: `app_row_${activeApplicationId}` },
@@ -90,7 +85,6 @@ export function ApplicationForm() {
       })
     }
 
-    // Persist submission status in stub backend
     await fetch(`/api/stubs/applications/${activeApplicationId}/submit`, {
       method: 'POST',
     })
@@ -109,14 +103,7 @@ export function ApplicationForm() {
   if (submitted) {
     return (
       <div style={{ padding: 20, textAlign: 'center' }}>
-        <div
-          style={{
-            fontSize: 14,
-            fontWeight: 'bold',
-            color: '#006600',
-            marginBottom: 8,
-          }}
-        >
+        <div style={{ fontSize: 14, fontWeight: 'bold', color: '#006600', marginBottom: 8 }}>
           ✓ Application {activeApplicationId} submitted successfully.
         </div>
         <div style={{ fontSize: 12, color: '#666' }}>
@@ -198,7 +185,6 @@ export function ApplicationForm() {
             rows={4}
             style={{ width: '100%', marginTop: 2, resize: 'vertical' }}
           />
-
         </div>
       </fieldset>
 
@@ -231,23 +217,8 @@ function FormRow({
   wide?: boolean
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        padding: '3px 8px',
-        gap: 8,
-      }}
-    >
-      <label
-        style={{
-          ...labelStyle,
-          width: 180,
-          textAlign: 'right',
-          paddingTop: 2,
-          flexShrink: 0,
-        }}
-      >
+    <div style={{ display: 'flex', alignItems: 'flex-start', padding: '3px 8px', gap: 8 }}>
+      <label style={{ ...labelStyle, width: 180, textAlign: 'right', paddingTop: 2, flexShrink: 0 }}>
         {label.toUpperCase()}:{required && <span style={{ color: '#cc0000' }}>*</span>}
       </label>
       <div style={{ flex: 1 }}>
@@ -257,11 +228,7 @@ function FormRow({
             value={value}
             readOnly={readOnly}
             rows={2}
-            style={{
-              width: '100%',
-              background: readOnly ? '#f5f5f5' : '#fffacd',
-              resize: 'none',
-            }}
+            style={{ width: '100%', background: readOnly ? '#f5f5f5' : '#fffacd', resize: 'none' }}
           />
         ) : (
           <input
@@ -270,46 +237,25 @@ function FormRow({
             readOnly={readOnly}
             onChange={(e) => onChange?.(e.target.value)}
             placeholder={placeholder}
-            style={{
-              width: wide ? '100%' : 200,
-              background: readOnly ? '#f5f5f5' : required ? '#fffacd' : '#fff',
-            }}
+            style={{ width: wide ? '100%' : 200, background: readOnly ? '#f5f5f5' : required ? '#fffacd' : '#fff' }}
           />
         )}
-
       </div>
     </div>
   )
 }
 
 const sectionHeader: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 'bold',
-  color: '#003478',
-  marginBottom: 10,
-  borderBottom: '2px solid #003478',
-  paddingBottom: 4,
+  fontSize: 13, fontWeight: 'bold', color: '#003478', marginBottom: 10,
+  borderBottom: '2px solid #003478', paddingBottom: 4,
 }
-
 const fieldsetStyle: React.CSSProperties = {
-  border: '1px solid #999',
-  padding: '8px 4px',
-  marginBottom: 10,
-  background: '#fafafa',
+  border: '1px solid #999', padding: '8px 4px', marginBottom: 10, background: '#fafafa',
 }
-
 const legendStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 'bold',
-  color: '#444',
-  padding: '0 4px',
-  textTransform: 'uppercase',
-  letterSpacing: 0.5,
+  fontSize: 11, fontWeight: 'bold', color: '#444', padding: '0 4px',
+  textTransform: 'uppercase', letterSpacing: 0.5,
 }
-
 const labelStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 'bold',
-  textTransform: 'uppercase',
-  letterSpacing: 0.3,
+  fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.3,
 }

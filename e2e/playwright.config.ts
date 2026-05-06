@@ -6,7 +6,7 @@ export default defineConfig({
   timeout: 180_000,             // 180s per test (Gemini calls can take 10-20s each; 6 calls total)
   expect: { timeout: 30_000 },  // 30s for SSE-driven UI changes
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:4000',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: { mode: 'on', size: { width: 1280, height: 800 } },

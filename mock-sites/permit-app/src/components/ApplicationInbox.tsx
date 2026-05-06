@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useR4miStore } from '../../store/r4mi.store'
+import { usePermit } from '../context/PermitContext'
 
 interface Application {
   application_id: string
@@ -81,9 +81,7 @@ const WORKFLOWS = [
 const PERMIT_TYPES = Object.entries(TYPE_LABELS).filter(([k]) => k !== 'general')
 
 export function ApplicationInbox({ onSelectApp }: { onSelectApp: () => void }) {
-  const setActiveApplicationId = useR4miStore((s) => s.setActiveApplicationId)
-  const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
-  const clearDemoSteps = useR4miStore((s) => s.clearDemoSteps)
+  const { setActiveApplicationId, activeApplicationId } = usePermit()
   const queryClient = useQueryClient()
 
   const [showPsst, setShowPsst] = useState(false)
@@ -101,7 +99,6 @@ export function ApplicationInbox({ onSelectApp }: { onSelectApp: () => void }) {
   })
 
   function handleRowClick(app: Application) {
-    clearDemoSteps()
     setActiveApplicationId(app.application_id)
     onSelectApp()
   }
@@ -133,9 +130,7 @@ export function ApplicationInbox({ onSelectApp }: { onSelectApp: () => void }) {
         setNewRequest('')
         setNewPermitType('fence_variance')
         setShowNewForm(false)
-        // Auto-filter to the newly created type so the user sees it
         setFilterType(newApp.permit_type)
-        clearDemoSteps()
         setActiveApplicationId(newApp.application_id)
         onSelectApp()
       }

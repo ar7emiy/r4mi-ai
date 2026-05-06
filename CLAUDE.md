@@ -4,20 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # r4mi-ai — Claude Code Master Build Instructions
 
-Read this file first. Then read ARCHITECTURE.md, WORKFLOWS.md, DEMO_SCRIPT.md, and DESIGN.md before writing a single line of code. PROGRESS.md tracks build history and known bugs; PLAN.md tracks current sprint scope.
+Read this file first. Then read ARCHITECTURE.md, WORKFLOWS.md, DEMO_SCRIPT.md, and DESIGN.md before writing a single line of code.
 
 ---
 
 ## Commands
 
-### Dev servers (run both; e2e expects them on :8000 and :3000)
+### Dev servers (e2e expects backend on :8000, r4mi on :3000, permit-app on :4000)
 ```bash
 # Backend
 cd backend && uvicorn main:app --reload --port 8000
-# Frontend
+# r4mi sidebar + utility routes
 cd frontend && npm run dev                 # vite on :3000
+# Mock permit site (host page)
+cd mock-sites/permit-app && npm run dev    # vite on :4000
 # One-shot full stack
-docker compose up                          # backend + frontend + volume-mounted seeds
+docker compose up                          # backend + r4mi + permit-app
 ```
 
 ### Frontend build / typecheck
@@ -43,13 +45,11 @@ Playwright config (`e2e/playwright.config.ts`): serial (`fullyParallel: false` �
 
 ---
 
-## Current Implementation Notes (supersede the spec below where they conflict)
-
-The spec further down documents the intended build. Six non-Claude commits on 2026-04-05/06 (`5bf7f98`, `123d571`, `0cc77f4`, `3fcf458`, `5cf57f9`, `83fa4dc`) reshaped significant parts of the system. Treat these as the current ground truth:
+## Current Implementation Notes
 
 ### Sidebar is a phase-based state machine
 - [frontend/src/sidebar/SidebarApp.tsx](frontend/src/sidebar/SidebarApp.tsx) defines `type Phase = 'idle' | 'recording' | 'detected' | 'replay' | 'publishing' | 'agents'` and switches the whole sidebar UI on it. There is no more independent chat thread + buttons model; the sidebar renders a different surface per phase.
-- The sidebar is persistent (iframe always mounted, collapsed until opened) and chat-first. A dark/light theme is driven by a `CLR` CSS-variable object exported from `SidebarApp.tsx` and mutated on theme toggle. **Reuse `CLR` for any new sidebar styling** — do not hardcode hex colors. `frontend/refactor_clr.py` is the one-shot codemod that introduced this.
+- The sidebar is persistent (iframe always mounted, collapsed until opened) and chat-first. A dark/light theme is driven by a `CLR` CSS-variable object exported from `SidebarApp.tsx` and mutated on theme toggle. **Reuse `CLR` for any new sidebar styling** — do not hardcode hex colors.
 - Sidebar tabs: `chat` and `activity`. The activity tab shows `captureLogs` from `capture.js` narration events.
 
 ### HITL replay replaced per-field gates during replay
@@ -79,9 +79,6 @@ The spec further down documents the intended build. Six non-Claude commits on 20
 - [backend/main.py](backend/main.py) lifespan, when `DEMO_SESSION_SEED=true`, **deletes all `NarrowAgentSpec` rows and all non-seeded `SessionRecord` rows before re-seeding**. This is what keeps the demo idempotent across restarts. `SessionRecord.is_seeded` is the flag used to discriminate.
 - Seeding happens in a background task (`asyncio.create_task`) so uvicorn doesn't block on Gemini calls at boot.
 
-### Kanban is a first-class surface
-- [backend/routers/kanban.py](backend/routers/kanban.py) + [backend/seed/kanban.json](backend/seed/kanban.json) back a kanban view inside the sidebar. The seed JSON schema has been re-shaped multiple times in these commits — treat the current file as the source of truth, not any older doc. Do not regress the trailing-comma fix from `123d571`.
-
 ### Chat system prompt rewritten
 - [backend/routers/chat.py](backend/routers/chat.py)'s `SYSTEM_PROMPT` now emphasizes `/suggest-flow` commands, describing agents (utility/goals/inputs/outputs), and explaining r4mi's current understanding of the webpage and user intent. Keep that framing if you touch the prompt.
 
@@ -105,16 +102,13 @@ The spec further down documents the intended build. Six non-Claude commits on 20
 ### CI workflow
 - [.github/workflows/e2e-demo.yml](.github/workflows/e2e-demo.yml) now runs `npm ci` inside `e2e/` **before** `npx playwright install` (previously it skipped the dep install and relied on npx-on-demand). It also uses `npx -y` consistently to skip prompts.
 
-### System view route was enhanced
-- The `/system` route was upgraded beyond plain Mermaid rendering — check [frontend/update_system_view.py](frontend/update_system_view.py) history and the route itself before assuming `system-diagram.mermaid` is the only source of truth.
+### System view route
+- The `/system` route renders `frontend/src/assets/system-diagram.mermaid` via the mermaid npm package plus additional context — check [frontend/src/pages/SystemPage.tsx](frontend/src/pages/SystemPage.tsx) before assuming the mermaid file is the only source.
 
-### Backend router set (beyond what the Project Structure section lists)
-- `chat.py`, `kanban.py`, `_sse_bus.py` are real routers now.
+### Backend router set
+- `chat.py` and `_sse_bus.py` are active routers beyond what the Project Structure section lists.
 - `services/exceptions.py` defines `QuotaExhaustedException`; the agents router catches it and surfaces Gemini quota errors to the UI.
 - `services/sse_bus.py` (imported as `sse_bus`) is the canonical broadcast channel for non-log SSE events.
-
-### Root-level `update_*.py` scripts are historical codemods
-`update_chat_input.py`, `update_form.py`, `update_loader.py`, `update_sidebar.py`, `update_sidebar_phase2.py`, `update_sidebar_cssvars.py`, `frontend/refactor_clr.py`, `frontend/update_system_view.py` are one-shot scripts used to generate the above changes. **Do not re-run them** (they'd corrupt the current files) and do not model new refactors after them unless explicitly asked.
 
 ---
 
@@ -355,6 +349,15 @@ r4mi-ai/
 ├── docker-compose.yml
 ├── .env.example
 │
+├── mock-sites/                 ← standalone host-page test harnesses (not r4mi product code)
+│   └── permit-app/             ← City of Riverdale MPPS — runs on :4000
+│       ├── index.html          ← loads r4mi-loader.js via <script src="http://localhost:3000/...">
+│       ├── vite.config.ts      ← port 4000, proxies /api → :8000
+│       └── src/
+│           ├── context/
+│           │   └── PermitContext.tsx  ← activeApplicationId + demoMode (no Zustand)
+│           └── components/     ← all legacy permit UI components
+│
 ├── backend/
 │   ├── main.py
 │   ├── requirements.txt
@@ -380,7 +383,9 @@ r4mi-ai/
 │   │   ├── evidence.py
 │   │   ├── stubs.py
 │   │   ├── sse.py
-│   │   └── logs.py
+│   │   ├── logs.py
+│   │   ├── chat.py
+│   │   └── _sse_bus.py
 │   ├── models/
 │   │   ├── event.py
 │   │   ├── agent_spec.py
@@ -398,17 +403,6 @@ r4mi-ai/
     │   ├── r4mi-loader.js          ← injected into host page; manages sidebar iframe + postMessage relay
     │   └── capture.js              ← DOM observer; extracts element_context; POSTs UIEvents to /api/observe
     └── src/
-        ├── components/
-        │   ├── legacy/             ← mock permit UI (demo harness only — not the real product UI)
-        │   │   ├── ApplicationInbox.tsx
-        │   │   ├── ApplicationForm.tsx
-        │   │   ├── GISLookup.tsx
-        │   │   ├── PolicyReference.tsx
-        │   │   ├── CodeEnforcement.tsx
-        │   │   ├── OwnerRegistry.tsx
-        │   │   └── UtilityCapacity.tsx
-        │   └── overlay/
-        │       └── ApprovalGate.tsx    ← HITL per-field gate rendered inline on host form fields
         ├── sidebar/                ← the r4mi UI — runs as iframe inside any host page
         │   ├── SidebarApp.tsx      ← root; chat thread + record button + agents drawer
         │   ├── hooks/
@@ -418,12 +412,11 @@ r4mi-ai/
         │       ├── ChatMessage.tsx     ← renders notification/spec/agent-step/error messages + action buttons
         │       ├── ChatInput.tsx       ← correction input + teach-me toggle
         │       ├── RecordButton.tsx    ← enters teach-me mode; signals capture.js via postMessage
-        │       ├── ReplayPreview.tsx   ← step-by-step action sequence preview with source tags [TODO]
+        │       ├── ReplayPreview.tsx   ← step-by-step action sequence preview with source tags
         │       └── AgentverseDrawer.tsx← agent marketplace
-        ├── hooks/
-        │   └── useSSE.tsx          ← legacy SSE hook (used by mock permit UI demo harness)
-        ├── store/
-        │   └── r4mi.store.ts       ← matchedAgent, matchScore, session state
+        ├── pages/
+        │   ├── EvidencePage.tsx    ← CLI evidence panel at /evidence
+        │   └── SystemPage.tsx      ← system architecture at /system (renders system-diagram.mermaid)
         └── assets/
             └── system-diagram.mermaid
 ```

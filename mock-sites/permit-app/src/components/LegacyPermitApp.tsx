@@ -6,7 +6,7 @@ import { PolicyReference } from './PolicyReference'
 import { CodeEnforcement } from './CodeEnforcement'
 import { OwnerRegistry } from './OwnerRegistry'
 import { UtilityCapacity } from './UtilityCapacity'
-import { useR4miStore } from '../../store/r4mi.store'
+import { usePermit } from '../context/PermitContext'
 
 type Tab =
   | 'inbox'
@@ -30,18 +30,7 @@ const TAB_LABELS: Record<Tab, string> = {
 export function LegacyPermitApp() {
   const [activeTab, setActiveTab] = useState<Tab>('inbox')
   const [brokenLink, setBrokenLink] = useState<string | null>(null)
-  const navigateTo = useR4miStore((s) => s.navigateTo)
-  const setNavigateTo = useR4miStore((s) => s.setNavigateTo)
-  const activeApplicationId = useR4miStore((s) => s.activeApplicationId)
-  const setDemoMode = useR4miStore((s) => s.setDemoMode)
-
-  // When the overlay requests navigation, switch the active tab and clear the request
-  useEffect(() => {
-    if (navigateTo) {
-      setActiveTab(navigateTo as Tab)
-      setNavigateTo(null)
-    }
-  }, [navigateTo])
+  const { activeApplicationId, setDemoMode } = usePermit()
 
   // Sync active application ID to body so r4mi-loader.js can read it
   useEffect(() => {
@@ -238,7 +227,6 @@ export function LegacyPermitApp() {
               boxShadow: '4px 4px 0 #000',
             }}
           >
-            {/* Title bar */}
             <div style={{
               background: 'linear-gradient(90deg, #0a246a, #3a6ea5)',
               color: '#fff',
@@ -257,7 +245,6 @@ export function LegacyPermitApp() {
               }}>&#x2715;</button>
             </div>
 
-            {/* Address bar */}
             <div style={{
               background: '#f0f0f0', borderBottom: '1px solid #aaa',
               padding: '3px 8px', fontSize: 11, fontFamily: 'Arial',
@@ -272,7 +259,6 @@ export function LegacyPermitApp() {
               </span>
             </div>
 
-            {/* Body */}
             <div style={{ padding: '20px 24px 16px', background: '#fff' }}>
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16 }}>
                 <div style={{ fontSize: 48, lineHeight: 1 }}>&#x1F6AB;</div>

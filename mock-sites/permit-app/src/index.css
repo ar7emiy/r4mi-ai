@@ -1,0 +1,49 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  background-color: #f0f0f0;
+  color: #000;
+}
+
+.legacy-input {
+  border: 1px solid #999;
+  border-radius: 0;
+  background: #fff;
+  padding: 2px 4px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+}
+
+.legacy-input:focus {
+  outline: 1px solid #003478;
+}
+
+.legacy-btn {
+  border: 1px solid #666;
+  border-radius: 0;
+  background: linear-gradient(to bottom, #e8e8e8, #d0d0d0);
+  padding: 3px 12px;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.legacy-btn:hover {
+  background: linear-gradient(to bottom, #d8d8d8, #c0c0c0);
+}
+
+.legacy-btn-primary {
+  background: #2e6da4;
+  color: #fff;
+  border: 1px solid #1a4a7a;
+}
+
+.legacy-btn-primary:hover {
+  background: #235580;
+}

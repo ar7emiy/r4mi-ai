@@ -19,7 +19,7 @@ from models.agent_spec import NarrowAgentSpec  # noqa: F401
 from models.event import UIEvent, ActionTrace
 
 # ── routers ──────────────────────────────────────────────────────────────────
-from routers import observe, session, agents, evidence, stubs, sse, logs, chat, kanban
+from routers import observe, session, agents, evidence, stubs, sse, logs, chat
 
 
 def _make_events(session_id: str, user_id: str, base_time: datetime,
@@ -287,7 +287,6 @@ app.include_router(stubs.router)
 app.include_router(sse.router)
 app.include_router(logs.router)
 app.include_router(chat.router)
-app.include_router(kanban.router)
 
 
 @app.get("/health")
