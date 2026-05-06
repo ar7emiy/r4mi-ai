@@ -7,11 +7,11 @@ export default defineConfig({
   server: {
     port: 4000,
     proxy: {
-      // r4mi backend endpoints — observe, sse, logs, agents, chat.
-      // /api/stubs/* is intentionally NOT proxied: it's served in-process by
-      // permitMockApiPlugin so the permit app's stub data stays self-contained
-      // and r4mi backend carries zero domain knowledge.
-      '^/api/(?!stubs/).*': {
+      // Proxy all /api/* to r4mi backend. The permitMockApiPlugin middleware
+      // runs first and handles /api/stubs/* in-process before the proxy sees
+      // them — so stubs never reach the backend and /api/observe, /api/sse, etc.
+      // are correctly forwarded.
+      '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
