@@ -1,15 +1,19 @@
 from __future__ import annotations
+import os
 
-from fastapi import APIRouter, Depends
-from sqlmodel import Session
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session, select
 
 from db import get_session
 from models.event import UIEvent, SSEEventType
 from models.agent_spec import NarrowAgentSpec
+from models.session import SessionRecord
 from agents.observer_agent import observer_agent
 from services.sse_bus import sse_bus
 from services.exceptions import QuotaExhaustedException
 from services.network_capture_service import network_capture_service, NetworkCall
+from services.embedding_service import embedding_service
+from services.log_streamer import logger
 
 router = APIRouter()
 
@@ -66,3 +70,29 @@ async def observe_network(
     """
     stored = network_capture_service.record(call, db)
     return {"status": "ok" if stored else "skipped"}
+
+
+@router.delete("/api/observe/reset")
+def reset_state(db: Session = Depends(get_session)):
+    """Wipe all sessions and published agents — for E2E test setup only.
+
+    Guarded by ALLOW_RESET=true env var so it cannot run in production.
+    Also clears the embedding cache so stale vectors don't bleed across runs.
+    """
+    if os.getenv("ALLOW_RESET", "false").lower() != "true":
+        raise HTTPException(status_code=403, detail="ALLOW_RESET not enabled")
+
+    sessions = db.exec(select(SessionRecord)).all()
+    for s in sessions:
+        db.delete(s)
+    agents = db.exec(select(NarrowAgentSpec)).all()
+    for a in agents:
+        db.delete(a)
+    db.commit()
+
+    embedding_service._cache.clear()
+
+    logger.info(
+        f"[Reset] Wiped {len(sessions)} sessions, {len(agents)} agents"
+    )
+    return {"status": "ok", "sessions_deleted": len(sessions), "agents_deleted": len(agents)}

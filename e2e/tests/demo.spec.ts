@@ -26,11 +26,13 @@
  */
 import { test, expect } from '@playwright/test'
 
-test('Complete demo flow — all 7 beats', async ({ page }) => {
+test('Complete demo flow — all 7 beats', async ({ page, request }) => {
 
   // ────────────────────────────────────────────────────────────────────
-  // SETUP
+  // SETUP — wipe sessions + agents so every run starts from a clean slate
   // ────────────────────────────────────────────────────────────────────
+  await request.delete('http://localhost:8000/api/observe/reset')
+
   await page.goto('/')
   await page.waitForLoadState('load')
   await expect(page.getByText('APPLICATION INBOX — PENDING REVIEW QUEUE')).toBeVisible()
@@ -106,11 +108,12 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
   // (READ/FETCH/REASON/WRITE/ASSERT) from the captured trace +
   // network_calls. Site-agnostic — assertions don't reference field names.
   // ────────────────────────────────────────────────────────────────────
-  await test.step('Beat 3 — review replay opens HITL phase with at least one step', async () => {
+  await test.step('Beat 3 — review replay opens HITL phase, spec builds', async () => {
     await sidebar.getByText(/review replay/i).click()
-    // Spec build is a Gemini call — allow 45s for steps to populate.
-    // We assert that *some* step row appears (step number "1." anchored).
-    await expect(sidebar.getByText(/^1\./).first()).toBeVisible({ timeout: 45_000 })
+    // Spec build is a Gemini call. Wait for the "begin replay" button — it
+    // only appears once the preview has resolved all step values, so its
+    // presence confirms HITLReplay is fully loaded and ready.
+    await expect(sidebar.getByText(/begin replay/i)).toBeVisible({ timeout: 60_000 })
   })
 
   // ────────────────────────────────────────────────────────────────────
@@ -122,25 +125,30 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
     // HITLReplay renders "▶ begin replay" before the first approve button appears
     await sidebar.getByText(/begin replay/i).click()
 
-    const maxSteps = 8
+    // Wait for the very first approve button — each step takes ~1.4s to
+    // navigate + fill before showing it. Give 15s for the first to appear.
+    await expect(sidebar.getByTestId('replay-approve')).toBeVisible({ timeout: 15_000 })
+
+    const maxSteps = 10
     for (let i = 0; i < maxSteps; i++) {
       const approveBtn = sidebar.getByTestId('replay-approve')
-      const appeared = await approveBtn.isVisible({ timeout: 8_000 }).catch(() => false)
+      const appeared = await approveBtn.isVisible({ timeout: 10_000 }).catch(() => false)
       if (!appeared) break
       await approveBtn.click()
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(1_000)
     }
-    await expect(sidebar.getByText(/review complete|all.*steps reviewed/i)).toBeVisible({ timeout: 10_000 })
+    await expect(sidebar.getByText(/review complete|all.*steps reviewed/i).first()).toBeVisible({ timeout: 15_000 })
   })
 
   // ────────────────────────────────────────────────────────────────────
   // BEAT 5 — Publish (2:00–2:25)
   // ────────────────────────────────────────────────────────────────────
   await test.step('Beat 5 — publish agent to Agentverse', async () => {
-    await expect(sidebar.getByText(/sources/i)).toBeVisible()
+    // knowledge_sources section only shows when Vision extracted sources —
+    // skip that check; go straight to publish.
     await sidebar.getByText(/publish agent/i).click()
-    // Publish = 2 Gemini calls (spec embed + publish) — allow 30s
-    await expect(sidebar.getByText(/published/i)).toBeVisible({ timeout: 30_000 })
+    // Publish = 2 Gemini calls (spec embed + persist) — allow 45s
+    await expect(sidebar.getByText(/published/i)).toBeVisible({ timeout: 45_000 })
   })
 
   // ────────────────────────────────────────────────────────────────────
@@ -168,7 +176,7 @@ test('Complete demo flow — all 7 beats', async ({ page }) => {
     }
     await sidebar.getByText('agents', { exact: true }).first().click()
     await expect(sidebar.locator('[data-testid="agent-card"]').first()).toBeVisible({ timeout: 5_000 })
-    await sidebar.locator('[data-testid="agent-card"]').first().getByText('run').click()
+    await sidebar.locator('[data-testid="agent-card"]').first().getByRole('button', { name: 'run' }).click()
   })
 
   await test.step('Beat 6 — agent writes at least one form field', async () => {

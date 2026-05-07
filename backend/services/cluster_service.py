@@ -128,9 +128,13 @@ class ClusterService:
             logger.info(
                 f"[Cluster] {cluster_id[:8]} reached size {size} — labelled \"{label}\""
             )
-        elif size >= MIN_CLUSTER_SIZE and existing_label and not best_match.cluster_label == existing_label:
-            # Already labelled; just note we crossed if this is the moment.
-            crossed = (size == MIN_CLUSTER_SIZE)
+        elif existing_label is not None and size >= MIN_CLUSTER_SIZE:
+            # Cluster is already established and labeled. Every new session
+            # that joins it is another repetition of the same pattern —
+            # surface the optimization opportunity again so the sidebar
+            # prompts the worker. (AGENT_MATCH_FOUND pre-empts this if a
+            # published agent already covers the pattern.)
+            crossed = True
 
         return ClusterAssignment(
             cluster_id=cluster_id,

@@ -181,6 +181,7 @@ export function ApplicationForm() {
           <label style={labelStyle}>PROCESSING NOTES:</label>
           <textarea
             data-testid="field-notes"
+            aria-label="Processing Notes"
             className="legacy-input"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -229,6 +230,7 @@ function FormRow({
         {wide ? (
           <textarea
             data-testid={testId}
+            aria-label={label}
             className="legacy-input"
             value={value}
             readOnly={readOnly}
@@ -238,6 +240,7 @@ function FormRow({
         ) : (
           <input
             data-testid={testId}
+            aria-label={label}
             className="legacy-input"
             value={value}
             readOnly={readOnly}
