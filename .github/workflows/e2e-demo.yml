@@ -1,4 +1,4 @@
-name: E2E Demo Recording
+name: E2E Demo
 
 on:
   push:
@@ -8,16 +8,18 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      DEMO_SESSION_SEED: "true"
       DATABASE_URL: sqlite:///./r4mi.db
+      MIN_CLUSTER_SIZE: "1"
+      ALLOW_RESET: "true"
 
     steps:
       - uses: actions/checkout@v4
 
+      # ── Python / backend ─────────────────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -29,21 +31,9 @@ jobs:
 
       - name: Start backend
         working-directory: backend
-        run: |
-          uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
-          echo "Backend PID: $!"
-        env:
-          GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
-          DEMO_SESSION_SEED: "true"
+        run: uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
 
-      - name: Verify backend is starting
-        run: |
-          sleep 5
-          echo "=== Backend log (first 50 lines) ==="
-          head -50 /tmp/backend.log || echo "No log file found"
-          echo "=== Checking port 8000 ==="
-          curl -s http://localhost:8000/health || echo "Health endpoint not responding yet"
-
+      # ── Node / frontend ──────────────────────────────────────────────────────
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -57,25 +47,55 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Serve frontend
+      - name: Serve frontend (r4mi sidebar + utilities on :3000)
         run: npx -y serve -s frontend/dist -p 3000 &
 
-      - name: Wait for servers
-        run: |
-          npx -y wait-on http://localhost:8000/health http://localhost:3000 --timeout 90000
+      # ── permit-app (mock host site on :4000) ─────────────────────────────────
+      - name: Install permit-app deps
+        working-directory: mock-sites/permit-app
+        run: npm ci
 
+      - name: Build permit-app
+        working-directory: mock-sites/permit-app
+        run: npm run build
+
+      - name: Serve permit-app on :4000 (preview includes mock API middleware)
+        working-directory: mock-sites/permit-app
+        run: npx vite preview --port 4000 --host 0.0.0.0 > /tmp/permit-app.log 2>&1 &
+
+      # ── Wait for all services ─────────────────────────────────────────────────
+      - name: Wait for all servers
+        run: |
+          npx -y wait-on \
+            http://localhost:8000/health \
+            http://localhost:3000 \
+            http://localhost:4000 \
+            --timeout 90000
+
+      - name: Verify reset endpoint works
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE http://localhost:8000/api/observe/reset)
+          echo "Reset endpoint status: $STATUS"
+          if [ "$STATUS" != "200" ]; then echo "WARNING: reset endpoint returned $STATUS"; fi
+
+      # ── E2E ──────────────────────────────────────────────────────────────────
       - name: Install E2E deps + Playwright browsers
         working-directory: e2e
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Run E2E tests
+      - name: Run health checks
         working-directory: e2e
-        run: npx playwright test demo health
-        env:
-          PWSLOWMO: "800"
+        run: npx playwright test health
 
+      - name: Run demo flow
+        working-directory: e2e
+        run: npx playwright test demo
+        env:
+          PWSLOWMO: "0"
+
+      # ── Artifacts ────────────────────────────────────────────────────────────
       - name: Upload test recordings
         uses: actions/upload-artifact@v4
         if: always()
@@ -92,8 +112,10 @@ jobs:
           path: e2e/playwright-report/
           retention-days: 7
 
-      - name: Dump backend logs on failure
+      - name: Dump logs on failure
         if: failure()
         run: |
-          echo "=== Full backend log ==="
-          cat /tmp/backend.log || echo "No backend log found"
+          echo "=== Backend log ==="
+          cat /tmp/backend.log || true
+          echo "=== Permit-app log ==="
+          cat /tmp/permit-app.log || true

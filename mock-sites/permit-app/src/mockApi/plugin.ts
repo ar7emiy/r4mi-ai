@@ -73,7 +73,17 @@ export function permitMockApiPlugin(): Plugin {
   return {
     name: 'permit-mock-api',
     configureServer(server) {
-      const middleware: Connect.NextHandleFunction = async (req, res, next) => {
+      server.middlewares.use(buildMiddleware(server.config.logger))
+    },
+    // Also hook into vite preview so CI can use `npm run build && npm run preview`
+    configurePreviewServer(server) {
+      server.middlewares.use(buildMiddleware({ error: console.error }))
+    },
+  }
+}
+
+function buildMiddleware(logger: { error: (s: string) => void }) {
+  const middleware: Connect.NextHandleFunction = async (req, res, next) => {
         const url = req.url || ''
         if (!url.startsWith('/api/stubs/')) return next()
 
@@ -234,11 +244,9 @@ export function permitMockApiPlugin(): Plugin {
           // Fall through — unknown stubs path
           return send(res, 404, { detail: `Unknown stub path: ${path}` })
         } catch (err) {
-          server.config.logger.error(`[permit-mock-api] ${err}`)
+          logger.error(`[permit-mock-api] ${err}`)
           return send(res, 500, { detail: String(err) })
         }
       }
-      server.middlewares.use(middleware)
-    },
-  }
+  return middleware
 }
