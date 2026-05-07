@@ -55,13 +55,9 @@ jobs:
         working-directory: mock-sites/permit-app
         run: npm ci
 
-      - name: Build permit-app
+      - name: Start permit-app dev server on :4000
         working-directory: mock-sites/permit-app
-        run: npm run build
-
-      - name: Serve permit-app on :4000 (preview includes mock API middleware)
-        working-directory: mock-sites/permit-app
-        run: npx vite preview --port 4000 --host 0.0.0.0 > /tmp/permit-app.log 2>&1 &
+        run: npm run dev > /tmp/permit-app.log 2>&1 &
 
       # ── Wait for all services ─────────────────────────────────────────────────
       - name: Wait for all servers

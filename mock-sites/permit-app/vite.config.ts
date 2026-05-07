@@ -17,14 +17,4 @@ export default defineConfig({
       },
     },
   },
-  // preview mode (used in CI): same proxy config
-  preview: {
-    port: 4000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-    },
-  },
 })

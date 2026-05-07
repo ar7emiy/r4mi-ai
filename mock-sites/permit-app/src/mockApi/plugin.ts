@@ -75,10 +75,6 @@ export function permitMockApiPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use(buildMiddleware(server.config.logger))
     },
-    // Also hook into vite preview so CI can use `npm run build && npm run preview`
-    configurePreviewServer(server) {
-      server.middlewares.use(buildMiddleware({ error: console.error }))
-    },
   }
 }
 
