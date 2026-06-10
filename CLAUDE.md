@@ -41,7 +41,12 @@ npm run test:headed                                # watch browser with slow-mo
 npm run test:beat -- "Beat 3"                      # run a single beat by grep
 npx playwright show-report                         # view last run's report
 ```
-Playwright config: serial (`fullyParallel: false` — beats are stateful), 180s per-test timeout, 30s expect timeout for SSE-driven UI. Flakiness is almost always Gemini latency — retry before debugging.
+Playwright config: serial (`fullyParallel: false` — beats are stateful), 180s per-test timeout, 30s expect timeout for SSE-driven UI, `baseURL` is the permit-app host on :4000. Default slowMo is 800ms — set `PWSLOWMO=0` for full speed. Flakiness is almost always Gemini latency — retry before debugging.
+
+To reset backend state between E2E runs: start the backend with `ALLOW_RESET=true`, then `curl -X DELETE http://localhost:8000/api/observe/reset`.
+
+### CI
+`.github/workflows/e2e-demo.yml` runs the health + demo suites on every push to `main` against real Gemini (`GEMINI_API_KEY` repo secret, `MIN_CLUSTER_SIZE=1`, `ALLOW_RESET=true`). Test recordings and the Playwright report are uploaded as artifacts on every run.
 
 ---
 
@@ -153,6 +158,7 @@ r4mi-ai/
 ├── CLAUDE.md
 ├── ARCHITECTURE.md, WORKFLOWS.md, DEMO_SCRIPT.md, DESIGN.md
 ├── docker-compose.yml
+├── e2e/                        ← Playwright suite (health, demo, sidebar specs)
 │
 ├── mock-sites/
 │   └── permit-app/             ← one example host site, fully self-contained
@@ -223,16 +229,22 @@ AGENTVERSE_MATCH_THRESHOLD=0.85
 # Trust engine
 TRUST_PROMOTION_MIN_RUNS=10
 TRUST_PROMOTION_MAX_FAILURE_RATE=0.05
+TRUST_STALE_THRESHOLD_RUNS=50           # runs without use before an agent goes STALE
 
 # Vision budget
 VISION_PER_SESSION_BUDGET=8             # max Gemini Vision calls per session
-VISION_CACHE_TTL=300
 
 # Teach-mode step labelling
 STEP_LABEL_MODE=realtime                # realtime | batch
+
+# Server / testing
+CORS_ORIGINS=*                          # comma-separated allowed origins
+ALLOW_RESET=false                       # true enables DELETE /api/observe/reset (E2E only)
 ```
 
-`DEMO_SESSION_SEED` and `PATTERN_THRESHOLD` no longer exist.
+`DEMO_SESSION_SEED`, `PATTERN_THRESHOLD`, and `VISION_CACHE_TTL` no longer exist.
+
+**Stale docs warning:** `README.md`, `.env.example`, and `DEPLOY.md` predate the site-agnostic rewrite — they still reference `PATTERN_THRESHOLD`, `DEMO_SESSION_SEED`, and a backend `/api/stubs/*` endpoint, none of which exist. Trust this file and the code over them.
 
 ---
 
